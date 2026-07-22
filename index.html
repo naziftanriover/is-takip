@@ -83,7 +83,19 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px}
 .rh-mesai{background:var(--yesil)!important}.rh-oncall{background:var(--amber)!important}
 .rh-off{background:var(--gri)!important}
 .rota-hucre{color:#fff;font-weight:700;border-radius:6px;padding:6px 4px;font-size:12px}
+.rota-tablo th .th-tarih{display:block;font-weight:500;font-size:11px;color:var(--renk-soluk);margin-top:2px}
 .mini-not{color:var(--renk-soluk);font-size:12px}
+/* Rota gezinme + gecen hafta ozeti */
+.rota-gezinme{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 16px}
+.rota-etiket{font-weight:700;font-size:14px}
+.rota-alt{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.rota-sol{flex:1 1 420px;min-width:0}
+.rota-sag{flex:1 1 220px}
+.ozet-tablo{width:100%;border-collapse:collapse;font-size:13px}
+.ozet-tablo th,.ozet-tablo td{border:1px solid var(--renk-cizgi);padding:5px 6px;text-align:center}
+.ozet-tablo th{background:#f0f3f7;font-weight:700}
+.ozet-tablo td.kisi{text-align:left;font-weight:700}
+.ozet-rakam{font-weight:700}
 </style>
 </head>
 <body>
@@ -194,12 +206,26 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px}
       <h2>Rota (Haftalik Shift)</h2>
       <div class="kart-form">
         <div class="form-satir">
-          <div class="alan"><label>Hafta (herhangi bir gun secin)</label><input id="rTarih" type="date" /></div>
+          <div class="alan"><label>Hafta baslangic tarihi (Pazartesi)</label><input id="rTarih" type="date" /></div>
         </div>
-        <p class="mini-not" id="rHaftaBilgi"></p>
-        <div style="overflow-x:auto"><table class="rota-tablo" id="rotaTablo"></table></div>
-        <p id="rHata" class="hata-mesaji"></p>
-        <button id="rKaydet" type="button">Rotayi Kaydet</button>
+        <div class="rota-gezinme">
+          <button id="rOnceki" type="button" class="ikincil kucuk">&#9664; Onceki hafta</button>
+          <span class="rota-etiket" id="rHaftaBilgi"></span>
+          <button id="rSonraki" type="button" class="ikincil kucuk">Yeni haftaya gec &#9654;</button>
+        </div>
+        <div class="rota-alt">
+          <div class="rota-sol">
+            <div style="overflow-x:auto"><table class="rota-tablo" id="rotaTablo"></table></div>
+            <p id="rHata" class="hata-mesaji"></p>
+            <button id="rKaydet" type="button">Rotayi Kaydet</button>
+          </div>
+          <div class="rota-sag">
+            <div class="pano-kart" style="margin:0">
+              <h3 style="margin-top:0" id="rOzetBaslik">Gecen Hafta Ozeti</h3>
+              <div id="rOzet"><p class="bos-satir">Yukleniyor...</p></div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -272,6 +298,11 @@ const ROTA_SECENEK=[
 ];
 const ROTA_CSS={off:'rh-off',mesai:'rh-mesai',oncall:'rh-oncall'};
 const ROTA_LABEL={off:'Off',mesai:'Mesai',oncall:'On Call'};
+// Hafta numaralandirma: bu tarihin (Pazartesi) haftasi "Hafta 1" sayilir.
+const ROTA_ILK_HAFTA='2026-07-20';
+const GUN_MS=86400000;            // 1 gun = 24*60*60*1000 ms
+const HAFTA_MS=7*GUN_MS;          // 1 hafta ms
+const HAFTA_GUN_SAYISI=7;         // haftada gun sayisi
 const AUTH_HATA={
   'auth/invalid-email':'E-posta adresi gecersiz.',
   'auth/user-not-found':'E-posta veya sifre hatali.',
@@ -304,6 +335,35 @@ function haftaBasi(dateStr){
   d.setDate(d.getDate()+fark);
   const a=String(d.getMonth()+1).padStart(2,'0');const gg=String(d.getDate()).padStart(2,'0');
   return `${d.getFullYear()}-${a}-${gg}`;
+}
+// 'YYYY-AA-GG' -> yerel gece yarisi Date
+function tariheCevir(s){return new Date(s+'T00:00:00');}
+// Date -> 'YYYY-AA-GG'
+function isoTarih(d){const a=String(d.getMonth()+1).padStart(2,'0');const g=String(d.getDate()).padStart(2,'0');
+  return `${d.getFullYear()}-${a}-${g}`;}
+// 'YYYY-AA-GG' tarihine gun ekler/cikarir -> 'YYYY-AA-GG'
+function tarihEkle(s,gun){const d=tariheCevir(s);d.setDate(d.getDate()+gun);return isoTarih(d);}
+// 'YYYY-AA-GG' -> 'GG.AA' (kisa)
+function kisaTarih(s){const d=tariheCevir(s);const g=String(d.getDate()).padStart(2,'0');
+  const a=String(d.getMonth()+1).padStart(2,'0');return `${g}.${a}`;}
+// 'YYYY-AA-GG' -> 'GG.AA.YYYY' (uzun)
+function uzunTarih(s){const d=tariheCevir(s);const g=String(d.getDate()).padStart(2,'0');
+  const a=String(d.getMonth()+1).padStart(2,'0');return `${g}.${a}.${d.getFullYear()}`;}
+// Haftanin sirasi (ROTA_ILK_HAFTA=Hafta 1). Yuvarlama DST kaymalarini tolere eder.
+function haftaNo(weekStart){
+  return Math.round((tariheCevir(weekStart)-tariheCevir(ROTA_ILK_HAFTA))/HAFTA_MS)+1;
+}
+// Ekranda gosterilecek hafta etiketi: "Hafta N - Baslangic: GG.AA.YYYY"
+function haftaEtiket(weekStart){
+  const n=haftaNo(weekStart);
+  const bas=(n>=1)?('Hafta '+n):'Onceki donem';
+  return bas+' - Baslangic: '+uzunTarih(weekStart);
+}
+// Haftanin 7 gununun tarihleri (Pazartesi'den itibaren) -> ['YYYY-AA-GG', ...]
+function gunTarihleri(weekStart){
+  const arr=[];
+  for(let i=0;i<HAFTA_GUN_SAYISI;i++){arr.push(tarihEkle(weekStart,i));}
+  return arr;
 }
 
 // ================== DENETIM IZI ==================
@@ -388,14 +448,18 @@ async function panoCiz(){
     const hb=haftaBasi(bugun());
     const snap=await db.collection('shifts').doc(hb).get();
     const plan=snap.exists&&snap.data().plan?snap.data().plan:{};
-    rEl.innerHTML='<p class="mini-not">Hafta basi: '+hb+'</p>'+rotaTabloHTML(plan,false);
+    rEl.innerHTML='<p class="mini-not">'+haftaEtiket(hb)+'</p>'+rotaTabloHTML(plan,false,hb);
   }catch(err){console.error(err);rEl.innerHTML='<p class="bos-satir">Rota yuklenemedi.</p>';}
 }
 
 // Rota tablosu HTML uretir. duzenlenebilir=true ise select'ler, degilse renkli hucreler.
-function rotaTabloHTML(plan,duzenlenebilir){
+// weekStart verilirse her gun basligina o gunun tarihi (GG.AA) eklenir.
+function rotaTabloHTML(plan,duzenlenebilir,weekStart){
+  const tarihler=weekStart?gunTarihleri(weekStart):null;
   let h='<table class="rota-tablo"><tr><th>Kisi</th>';
-  ROTA_GUNLER.forEach(g=>h+='<th>'+g+'</th>');
+  ROTA_GUNLER.forEach((g,i)=>{
+    h+='<th>'+g+(tarihler?'<span class="th-tarih">'+kisaTarih(tarihler[i])+'</span>':'')+'</th>';
+  });
   h+='</tr>';
   ROTA_KISILER.forEach(kisi=>{
     h+='<tr><td class="kisi">'+kisi+'</td>';
@@ -418,39 +482,112 @@ function rotaTabloHTML(plan,duzenlenebilir){
 
 // ================== ROTA (duzenleme) ==================
 async function rotaYukle(){
-  $('rHata').textContent='';
-  if(!$('rTarih').value) $('rTarih').value=bugun();
+  $('rHata').textContent='';$('rHata').style.color='';
+  if(!$('rTarih').value) $('rTarih').value=haftaBasi(bugun());
   const hb=haftaBasi($('rTarih').value);
-  $('rHaftaBilgi').textContent='Bu hafta (Pazartesi): '+hb;
+  // Kullanici Pazartesi disinda bir gun secse bile input'u haftanin Pazartesi'sine sabitle
+  if($('rTarih').value!==hb) $('rTarih').value=hb;
+  $('rHaftaBilgi').textContent=haftaEtiket(hb);
   try{
     const snap=await db.collection('shifts').doc(hb).get();
     const plan=snap.exists&&snap.data().plan?snap.data().plan:{};
-    $('rotaTablo').outerHTML=rotaTabloHTML(plan,true).replace('<table class="rota-tablo">','<table class="rota-tablo" id="rotaTablo">');
+    $('rotaTablo').outerHTML=rotaTabloHTML(plan,true,hb).replace('<table class="rota-tablo">','<table class="rota-tablo" id="rotaTablo">');
     // select renklerini degisince guncelle
     document.querySelectorAll('#rotaTablo select').forEach(sel=>{
       sel.addEventListener('change',()=>{
         sel.className=ROTA_CSS[sel.value]||'';
       });
     });
+    await gecenHaftaOzetiYukle(hb);
   }catch(err){console.error(err);$('rHata').textContent='Rota yuklenemedi.';}
 }
+
+// Ekrandaki tablodan {kisi:[7 durum]} plani okur.
+function rotaPlaniOku(){
+  const plan={};
+  ROTA_KISILER.forEach(k=>plan[k]=Array(HAFTA_GUN_SAYISI).fill('off'));
+  document.querySelectorAll('#rotaTablo select').forEach(sel=>{
+    plan[sel.dataset.kisi][+sel.dataset.gun]=sel.value;
+  });
+  return plan;
+}
+
+// Bir haftanin planini Firestore'a yazar. logla=true ise denetim izine de dusurulur.
+async function rotaYaz(hb,plan,logla){
+  await db.collection('shifts').doc(hb).set({
+    weekStart:hb, plan:plan, updatedBy:durum.uid, updatedByName:adim(), updatedAt:SUNUCU_ZAMAN()
+  },{merge:true});
+  if(logla) await logYaz('guncelleme','Rota',hb,'hafta '+hb);
+}
+
 async function rotaKaydet(){
   const btn=$('rKaydet');btn.disabled=true;$('rHata').textContent='';
   try{
     const hb=haftaBasi($('rTarih').value||bugun());
-    const plan={};
-    ROTA_KISILER.forEach(k=>plan[k]=Array(7).fill('off'));
-    document.querySelectorAll('#rotaTablo select').forEach(sel=>{
-      plan[sel.dataset.kisi][+sel.dataset.gun]=sel.value;
-    });
-    await db.collection('shifts').doc(hb).set({
-      weekStart:hb, plan:plan, updatedBy:durum.uid, updatedByName:adim(), updatedAt:SUNUCU_ZAMAN()
-    },{merge:true});
-    await logYaz('guncelleme','Rota',hb,'hafta '+hb);
+    await rotaYaz(hb,rotaPlaniOku(),true);
     $('rHata').style.color='var(--yesil)';$('rHata').textContent='Rota kaydedildi.';
     setTimeout(()=>{$('rHata').style.color='';$('rHata').textContent='';},2500);
   }catch(err){console.error(err);$('rHata').style.color='';$('rHata').textContent='Kaydedilemedi. Tekrar deneyin.';}
   finally{btn.disabled=false;}
+}
+
+// Hafta degistir: once mevcut haftayi kaydet, sonra +/- 7 gun kaydirip yeni haftayi yukle.
+async function rotaHaftaKaydir(gunFarki){
+  const btnO=$('rOnceki'),btnS=$('rSonraki');btnO.disabled=true;btnS.disabled=true;
+  $('rHata').textContent='';$('rHata').style.color='';
+  const mevcut=haftaBasi($('rTarih').value||bugun());
+  try{
+    await rotaYaz(mevcut,rotaPlaniOku(),false); // otomatik kayit (denetim izine dusurmeden)
+  }catch(err){
+    console.error(err);
+    $('rHata').textContent='Kaydedilemedi, hafta degistirilmedi. Tekrar deneyin.';
+    btnO.disabled=false;btnS.disabled=false;return;
+  }
+  $('rTarih').value=tarihEkle(mevcut,gunFarki);
+  await rotaYukle();
+  btnO.disabled=false;btnS.disabled=false;
+}
+
+// Bir plandan her kisinin mesai/oncall/off gun sayilarini hesaplar.
+function rotaOzetHesapla(plan){
+  const ozet={};
+  ROTA_KISILER.forEach(k=>{
+    const say={mesai:0,oncall:0,off:0};
+    const dizi=(plan&&plan[k])||[];
+    for(let i=0;i<HAFTA_GUN_SAYISI;i++){
+      const d=dizi[i]||'off';
+      if(d==='mesai') say.mesai++;
+      else if(d==='oncall') say.oncall++;
+      else say.off++;
+    }
+    ozet[k]=say;
+  });
+  return ozet;
+}
+
+function rotaOzetHTML(ozet){
+  let h='<table class="ozet-tablo"><tr><th>Kisi</th><th>Mesai</th><th>On Call</th><th>Off</th></tr>';
+  ROTA_KISILER.forEach(k=>{
+    const o=ozet[k];
+    h+='<tr><td class="kisi">'+k+'</td>'+
+       '<td><span class="ozet-rakam" style="color:var(--yesil)">'+o.mesai+'</span></td>'+
+       '<td><span class="ozet-rakam" style="color:var(--amber)">'+o.oncall+'</span></td>'+
+       '<td><span class="ozet-rakam" style="color:var(--gri)">'+o.off+'</span></td></tr>';
+  });
+  h+='</table>';
+  return h;
+}
+
+// Ekrandaki haftanin bir onceki haftasinin ozetini yukler ve gosterir.
+async function gecenHaftaOzetiYukle(weekStart){
+  const el=$('rOzet');const bas=$('rOzetBaslik');
+  const oncekiHafta=tarihEkle(weekStart,-HAFTA_GUN_SAYISI);
+  bas.textContent='Gecen Hafta Ozeti ('+uzunTarih(oncekiHafta)+')';
+  try{
+    const snap=await db.collection('shifts').doc(oncekiHafta).get();
+    const plan=snap.exists&&snap.data().plan?snap.data().plan:{};
+    el.innerHTML=rotaOzetHTML(rotaOzetHesapla(plan));
+  }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Ozet yuklenemedi.</p>';}
 }
 
 // ================== DENETIM ==================
@@ -640,6 +777,8 @@ function subeCiz(){
 $('sKur').addEventListener('click',subeSeed);
 $('rKaydet').addEventListener('click',rotaKaydet);
 $('rTarih').addEventListener('change',rotaYukle);
+$('rOnceki').addEventListener('click',()=>rotaHaftaKaydir(-HAFTA_GUN_SAYISI));
+$('rSonraki').addEventListener('click',()=>rotaHaftaKaydir(HAFTA_GUN_SAYISI));
 let baslatildi=false;
 auth.onAuthStateChanged(async(u)=>{
   if(!u){
