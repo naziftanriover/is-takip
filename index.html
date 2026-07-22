@@ -1,0 +1,496 @@
+TEST_PASTE_123
+line2<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Is Takip</title>
+<style>
+:root{
+  --renk-arka:#f4f6f8;--renk-kart:#fff;--renk-ana:#1f6feb;--renk-ana-koyu:#1a5fd0;
+  --renk-metin:#1c2430;--renk-soluk:#6b7684;--renk-hata:#c0392b;--renk-cizgi:#e2e6ea;
+  --golge:0 2px 8px rgba(0,0,0,.06);--yuvarlak:10px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  background:var(--renk-arka);color:var(--renk-metin);line-height:1.5}
+.giris-sayfa{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.giris-kart{background:var(--renk-kart);padding:28px 24px;border-radius:var(--yuvarlak);
+  box-shadow:var(--golge);width:100%;max-width:360px}
+.giris-kart h1{margin:0 0 4px;font-size:22px}
+.alt-baslik{margin:0 0 20px;color:var(--renk-soluk);font-size:14px}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+input,select,textarea{width:100%;padding:10px 12px;margin-bottom:14px;border:1px solid var(--renk-cizgi);
+  border-radius:8px;font-size:15px;font-family:inherit;background:#fff}
+button{cursor:pointer;font-size:15px;font-weight:600;border:none;border-radius:8px;padding:10px 16px;
+  background:var(--renk-ana);color:#fff;transition:background .15s}
+button:hover{background:var(--renk-ana-koyu)}
+button:disabled{opacity:.6;cursor:default}
+.tam-genislik{width:100%}
+.ust-bar{background:var(--renk-kart);border-bottom:1px solid var(--renk-cizgi);padding:12px 20px;
+  display:flex;align-items:center;justify-content:space-between}
+.marka{font-weight:700}.kullanici{color:var(--renk-soluk);font-size:14px}
+.ust-sag{display:flex;align-items:center;gap:12px}
+.ikincil{background:transparent;color:var(--renk-ana);border:1px solid var(--renk-ana)}
+.ikincil:hover{background:#eaf1fd}
+.ikincil.kucuk,.kucuk{padding:6px 10px;font-size:13px}
+.sekme-bar{display:flex;flex-wrap:wrap;gap:4px;background:var(--renk-kart);
+  border-bottom:1px solid var(--renk-cizgi);padding:6px 12px 0}
+.sekme-btn{background:transparent;color:var(--renk-soluk);border:none;border-bottom:3px solid transparent;
+  border-radius:0;padding:10px 14px;font-weight:600}
+.sekme-btn:hover{background:#f0f3f7}
+.sekme-btn.aktif{color:var(--renk-ana);border-bottom-color:var(--renk-ana)}
+.icerik{max-width:720px;margin:20px auto;padding:0 16px}
+h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px}
+.kart-form{background:var(--renk-kart);border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);
+  box-shadow:var(--golge);padding:18px 16px;margin-bottom:20px}
+.form-satir{display:flex;flex-wrap:wrap;gap:14px}.form-satir .alan{flex:1 1 180px}
+.madde-kutu{border:1px solid var(--renk-cizgi);border-radius:8px;padding:10px 12px;margin:6px 0 14px}
+.madde-kutu legend{font-size:13px;font-weight:600;padding:0 6px}
+.onay-satiri{display:flex;align-items:center;gap:8px;font-weight:500;margin-bottom:8px}
+.onay-satiri input{width:auto;margin:0}
+.kayit-liste{list-style:none;padding:0;margin:10px 0;display:grid;gap:10px}
+.kayit-satiri{background:var(--renk-kart);border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);
+  padding:12px 14px;box-shadow:var(--golge)}
+.kayit-baslik{font-weight:700}.kayit-detay{font-size:14px;margin-top:2px}
+.kayit-alt{font-size:13px;color:var(--renk-soluk);margin-top:6px}
+.satir-arac{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.satir-arac select{width:auto;margin:0}
+.bos-satir{color:var(--renk-soluk);padding:10px}
+.hata-mesaji{color:var(--renk-hata);font-size:14px;min-height:20px}
+.sube-liste{list-style:none;padding:0;margin:16px 0;display:grid;gap:10px}
+.sube-oge{background:var(--renk-kart);border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);
+  padding:14px 16px;box-shadow:var(--golge);font-weight:600}
+.bos-durum{color:var(--renk-soluk);background:var(--renk-kart);border:1px dashed var(--renk-cizgi);
+  border-radius:var(--yuvarlak);padding:20px;text-align:center}
+.gizli{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- GIRIS -->
+<main id="girisSayfa" class="giris-sayfa">
+  <form id="girisForm" class="giris-kart" novalidate>
+    <h1>Is Takip</h1>
+    <p class="alt-baslik">Guvenlik / Denetim Ekibi</p>
+    <label for="email">E-posta</label>
+    <input id="email" type="email" autocomplete="username" />
+    <label for="sifre">Sifre</label>
+    <input id="sifre" type="password" autocomplete="current-password" />
+    <p id="girisHata" class="hata-mesaji"></p>
+    <button id="girisBtn" type="submit" class="tam-genislik">Giris Yap</button>
+  </form>
+</main>
+
+<!-- PANEL -->
+<div id="panel" class="gizli">
+  <header class="ust-bar">
+    <span class="marka">Is Takip</span>
+    <span class="ust-sag">
+      <span id="kullaniciAdi" class="kullanici"></span>
+      <button id="cikisBtn" class="ikincil" type="button">Cikis</button>
+    </span>
+  </header>
+  <p id="genelHata" class="hata-mesaji" style="text-align:center;margin:8px 16px 0"></p>
+
+  <nav class="sekme-bar">
+    <button class="sekme-btn aktif" data-hedef="sekme-denetim" type="button">Gunluk Denetim</button>
+    <button class="sekme-btn" data-hedef="sekme-gorevler" type="button">Gorevler</button>
+    <button class="sekme-btn" data-hedef="sekme-kasa" type="button">Kasa &amp; Kamera</button>
+    <button class="sekme-btn" data-hedef="sekme-log" type="button">Denetim Izi</button>
+    <button class="sekme-btn" data-hedef="sekme-subeler" type="button">Subeler</button>
+  </nav>
+
+  <main class="icerik">
+    <section id="sekme-denetim" class="sekme-bolum">
+      <h2>Gunluk Denetim</h2>
+      <form id="denetimForm" class="kart-form">
+        <div class="form-satir">
+          <div class="alan"><label>Sube</label><select id="dSube"></select></div>
+          <div class="alan"><label>Tarih</label><input id="dTarih" type="date" /></div>
+        </div>
+        <fieldset class="madde-kutu"><legend>Kontrol maddeleri</legend><div id="dMaddeler"></div></fieldset>
+        <label>Not (istege bagli)</label><textarea id="dNot" rows="2"></textarea>
+        <p id="dHata" class="hata-mesaji"></p>
+        <button id="dKaydet" type="submit">Denetimi Kaydet</button>
+      </form>
+      <h3>Son denetimler</h3><ul id="dListe" class="kayit-liste"></ul>
+    </section>
+
+    <section id="sekme-gorevler" class="sekme-bolum gizli">
+      <h2>Gorevler</h2>
+      <form id="gForm" class="kart-form">
+        <label>Gorev</label><input id="gBaslik" type="text" maxlength="120" />
+        <div class="form-satir">
+          <div class="alan"><label>Atanan kisi</label><select id="gAtanan"></select></div>
+          <div class="alan"><label>Son tarih (istege bagli)</label><input id="gTarih" type="date" /></div>
+        </div>
+        <p id="gHata" class="hata-mesaji"></p>
+        <button id="gKaydet" type="submit">Gorev Ekle</button>
+      </form>
+      <h3>Gorev listesi</h3><ul id="gListe" class="kayit-liste"></ul>
+    </section>
+
+    <section id="sekme-kasa" class="sekme-bolum gizli">
+      <h2>Kasa Farki &amp; Kamera Inceleme</h2>
+      <form id="kForm" class="kart-form">
+        <div class="form-satir">
+          <div class="alan"><label>Sube</label><select id="kSube"></select></div>
+          <div class="alan"><label>Tarih</label><input id="kTarih" type="date" /></div>
+        </div>
+        <div class="form-satir">
+          <div class="alan"><label>Tutar</label><input id="kTutar" type="number" min="0" step="0.01" /></div>
+          <div class="alan"><label>Yon</label><select id="kYon"><option value="eksik">Eksik</option><option value="fazla">Fazla</option></select></div>
+        </div>
+        <label class="onay-satiri"><input id="kKamera" type="checkbox" /> Kamera incelendi</label>
+        <label>Kamera bulgusu / not</label><textarea id="kBulgu" rows="2"></textarea>
+        <p id="kHata" class="hata-mesaji"></p>
+        <button id="kKaydet" type="submit">Kaydi Ekle</button>
+      </form>
+      <h3>Son kayitlar</h3><ul id="kListe" class="kayit-liste"></ul>
+    </section>
+
+    <section id="sekme-log" class="sekme-bolum gizli">
+      <h2>Denetim Izi (kim ne yapti)</h2>
+      <p class="alt-baslik">Bu kayitlar guvenlik geregi degistirilemez ve silinemez.</p>
+      <p id="lHata" class="hata-mesaji"></p>
+      <ul id="lListe" class="kayit-liste"></ul>
+    </section>
+
+    <section id="sekme-subeler" class="sekme-bolum gizli">
+      <h2>Subeler</h2>
+      <p id="sHata" class="hata-mesaji"></p>
+      <ul id="sListe" class="sube-liste"></ul>
+      <div id="sBos" class="bos-durum gizli">
+        Henuz sube tanimlanmamis.
+        <div id="sAdmin" class="gizli" style="margin-top:12px">
+          <button id="sKur" type="button">Varsayilan subeleri olustur (Alsancak, Kasgar, Zeytinlik, Itimat)</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Firebase compat SDK (dosyayi cift tiklayarak acinca da calisir) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+// ================== FIREBASE AYARLARI (is-takip projesi) ==================
+const firebaseConfig = {
+  apiKey: "AIzaSyDN8adK7IH71m2ecXjTJGK6ynEA1GyTIKM",
+  authDomain: "is-takip-164f0.firebaseapp.com",
+  projectId: "is-takip-164f0",
+  storageBucket: "is-takip-164f0.firebasestorage.app",
+  messagingSenderId: "887896566202",
+  appId: "1:887896566202:web:6c6a713f090a2b8574d583"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const SUNUCU_ZAMAN = () => firebase.firestore.FieldValue.serverTimestamp();
+
+// ================== SABITLER ==================
+const AUDIT_ITEMS=[
+  {key:'geceKapanis',label:'Gece kapanisi dogru'},
+  {key:'sanalInspired',label:'Sanal Inspired basildi'},
+  {key:'sanalGlobal',label:'Sanal Global basildi'},
+  {key:'sanalKiron',label:'Sanal Kiron basildi'},
+  {key:'futbol',label:'Futbol bahisleri basildi'},
+];
+const YON_ETIKET={eksik:'Eksik',fazla:'Fazla'};
+const DURUM_ETIKET={todo:'Yapilacak',doing:'Yapiliyor',done:'Bitti'};
+const DEFAULT_BRANCHES=[
+  {name:'Alsancak',order:1},{name:'Kasgar',order:2},
+  {name:'Zeytinlik',order:3},{name:'Itimat',order:4},
+];
+const AUTH_HATA={
+  'auth/invalid-email':'E-posta adresi gecersiz.',
+  'auth/user-not-found':'E-posta veya sifre hatali.',
+  'auth/wrong-password':'E-posta veya sifre hatali.',
+  'auth/invalid-credential':'E-posta veya sifre hatali.',
+  'auth/too-many-requests':'Cok fazla hatali deneme. Biraz sonra tekrar deneyin.',
+  'auth/network-request-failed':'Baglanti sorunu. Internetinizi kontrol edin.',
+};
+function authHata(e){return (e&&AUTH_HATA[e.code])||'Bir sorun olustu. Lutfen tekrar deneyin.';}
+
+// ================== DURUM ==================
+const durum={uid:null,profil:null,subeler:[],kullanicilar:[]};
+function adim(){return durum.profil&&durum.profil.name?durum.profil.name:'Kullanici';}
+function yoneticiMi(){return !!(durum.profil&&durum.profil.role==='admin');}
+function subeAdi(id){const s=durum.subeler.find(x=>x.id===id);return s?s.name:'(bilinmeyen sube)';}
+function kisiAdi(id){const k=durum.kullanicilar.find(x=>x.id===id);return k?k.name:'atanmamis';}
+
+// ================== KUCUK YARDIMCILAR ==================
+function $(id){return document.getElementById(id);}
+function bugun(){const d=new Date();const a=String(d.getMonth()+1).padStart(2,'0');
+  const g=String(d.getDate()).padStart(2,'0');return `${d.getFullYear()}-${a}-${g}`;}
+function saatMetni(ts){try{const d=ts&&ts.toDate?ts.toDate():ts;return d?new Date(d).toLocaleString('tr-TR'):'';}catch(e){return'';}}
+function secimDoldur(el,liste,bos){el.innerHTML=`<option value="">${bos}</option>`;
+  liste.forEach(x=>{const o=document.createElement('option');o.value=x.id;o.textContent=x.name;el.appendChild(o);});}
+
+// ================== DENETIM IZI ==================
+async function logYaz(action,entity,entityId,aciklama){
+  const u=auth.currentUser; if(!u) return;
+  try{
+    await db.collection('auditLog').add({
+      byUid:u.uid, byName:adim(), action:action, entity:entity,
+      entityId:entityId||null, aciklama:aciklama||'', at:SUNUCU_ZAMAN()
+    });
+  }catch(e){console.error('[is-takip] log yazilamadi',e);}
+}
+
+// ================== GIRIS ==================
+$('girisForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const h=$('girisHata'); h.textContent='';
+  const email=$('email').value.trim(); const sifre=$('sifre').value;
+  if(!email){h.textContent='Lutfen e-posta girin.';return;}
+  if(!sifre){h.textContent='Lutfen sifre girin.';return;}
+  const btn=$('girisBtn'); btn.disabled=true; btn.textContent='Giris yapiliyor...';
+  try{ await auth.signInWithEmailAndPassword(email,sifre); }
+  catch(err){ console.error('[is-takip] giris',err); h.textContent=authHata(err); }
+  finally{ btn.disabled=false; btn.textContent='Giris Yap'; }
+});
+$('cikisBtn').addEventListener('click', ()=>auth.signOut());
+
+// ================== SEKMELER ==================
+function sekmeleriKur(){
+  const btns=document.querySelectorAll('.sekme-btn');
+  const bols=document.querySelectorAll('.sekme-bolum');
+  btns.forEach(b=>b.addEventListener('click',()=>{
+    btns.forEach(x=>x.classList.toggle('aktif',x===b));
+    bols.forEach(s=>s.classList.toggle('gizli',s.id!==b.dataset.hedef));
+    if(b.dataset.hedef==='sekme-log') logCiz();
+  }));
+}
+
+// ================== VERI YUKLEME ==================
+async function profiliHazirla(u){
+  const ref=db.collection('users').doc(u.uid);
+  const snap=await ref.get();
+  if(snap.exists) return snap.data();
+  const ad=u.displayName||(u.email?u.email.split('@')[0]:'Kullanici');
+  const yeni={name:ad,role:'member'};
+  await ref.set(yeni);
+  return yeni;
+}
+async function subeleriYukle(){
+  const s=await db.collection('branches').orderBy('order').get();
+  durum.subeler=s.docs.map(d=>({id:d.id,...d.data()}));
+}
+async function kullanicilariYukle(){
+  const s=await db.collection('users').get();
+  durum.kullanicilar=s.docs.map(d=>({id:d.id,...d.data()}));
+}
+
+// ================== DENETIM ==================
+function denetimBaslat(){
+  secimDoldur($('dSube'),durum.subeler,'Sube secin...');
+  const m=$('dMaddeler'); m.innerHTML='';
+  AUDIT_ITEMS.forEach(md=>{const l=document.createElement('label');l.className='onay-satiri';
+    const c=document.createElement('input');c.type='checkbox';c.dataset.key=md.key;
+    l.appendChild(c);l.appendChild(document.createTextNode(' '+md.label));m.appendChild(l);});
+  $('dTarih').value=bugun();
+  $('denetimForm').onsubmit=async(e)=>{
+    e.preventDefault();const h=$('dHata');h.textContent='';
+    const sube=$('dSube').value;const tarih=$('dTarih').value;
+    if(!sube){h.textContent='Lutfen sube secin.';return;}
+    if(!tarih){h.textContent='Lutfen tarih secin.';return;}
+    const checks={};m.querySelectorAll('input[type=checkbox]').forEach(c=>checks[c.dataset.key]=c.checked);
+    const btn=$('dKaydet');btn.disabled=true;
+    try{
+      const ref=await db.collection('dailyAudits').add({
+        createdBy:durum.uid,createdByName:adim(),branchId:sube,date:tarih,
+        checks:checks,note:$('dNot').value.trim(),createdAt:SUNUCU_ZAMAN()});
+      await logYaz('olusturma','Gunluk denetim',ref.id,subeAdi(sube)+' / '+tarih);
+      $('dNot').value=''; await denetimCiz();
+    }catch(err){console.error(err);h.textContent='Kayit eklenemedi. Tekrar deneyin.';}
+    finally{btn.disabled=false;}
+  };
+  denetimCiz();
+}
+function denetimOzet(checks){const eksik=AUDIT_ITEMS.filter(m=>!checks||!checks[m.key]).map(m=>m.label);
+  return eksik.length?'Eksik: '+eksik.join(', '):'Tum maddeler tamam';}
+async function denetimCiz(){
+  const u=$('dListe');
+  try{
+    const s=await db.collection('dailyAudits').orderBy('date','desc').limit(40).get();
+    u.innerHTML='';
+    if(s.empty){u.innerHTML='<li class="bos-satir">Henuz denetim kaydi yok.</li>';return;}
+    s.forEach(doc=>{const k=doc.data();const li=document.createElement('li');li.className='kayit-satiri';
+      li.innerHTML=`<div class="kayit-baslik">${k.date} - ${subeAdi(k.branchId)}</div>
+        <div class="kayit-detay">${denetimOzet(k.checks)}</div>
+        <div class="kayit-alt">${k.note?k.note+' - ':''}${k.createdByName||''} - ${saatMetni(k.createdAt)}</div>`;
+      u.appendChild(li);});
+  }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Kayitlar yuklenemedi.</li>';}
+}
+
+// ================== GOREVLER ==================
+function gorevBaslat(){
+  secimDoldur($('gAtanan'),durum.kullanicilar,'Kime atanacak?');
+  $('gForm').onsubmit=async(e)=>{
+    e.preventDefault();const h=$('gHata');h.textContent='';
+    const baslik=$('gBaslik').value.trim();
+    if(!baslik){h.textContent='Lutfen gorev basligi girin.';return;}
+    const btn=$('gKaydet');btn.disabled=true;
+    try{
+      const ref=await db.collection('tasks').add({
+        createdBy:durum.uid,createdByName:adim(),title:baslik,
+        assignedTo:$('gAtanan').value||null,dueDate:$('gTarih').value||null,
+        status:'todo',createdAt:SUNUCU_ZAMAN()});
+      await logYaz('olusturma','Gorev',ref.id,baslik);
+      $('gBaslik').value='';$('gTarih').value='';$('gAtanan').value='';await gorevCiz();
+    }catch(err){console.error(err);h.textContent='Gorev eklenemedi. Tekrar deneyin.';}
+    finally{btn.disabled=false;}
+  };
+  gorevCiz();
+}
+async function gorevDurum(id,yeni){
+  try{await db.collection('tasks').doc(id).update({status:yeni});
+    await logYaz('guncelleme','Gorev',id,'durum: '+(DURUM_ETIKET[yeni]||yeni));await gorevCiz();}
+  catch(err){console.error(err);$('gHata').textContent='Durum guncellenemedi.';}
+}
+async function gorevSil(id,baslik){
+  try{await db.collection('tasks').doc(id).delete();
+    await logYaz('silme','Gorev',id,baslik);await gorevCiz();}
+  catch(err){console.error(err);$('gHata').textContent='Gorev silinemedi. Yetkiniz olmayabilir.';}
+}
+async function gorevCiz(){
+  const u=$('gListe');
+  try{
+    const s=await db.collection('tasks').orderBy('createdAt','desc').limit(50).get();
+    u.innerHTML='';
+    if(s.empty){u.innerHTML='<li class="bos-satir">Henuz gorev yok.</li>';return;}
+    s.forEach(doc=>{const g=doc.data();const id=doc.id;
+      const li=document.createElement('li');li.className='kayit-satiri';
+      const bas=document.createElement('div');bas.className='kayit-baslik';bas.textContent=g.title;
+      const det=document.createElement('div');det.className='kayit-detay';
+      det.textContent='Atanan: '+(g.assignedTo?kisiAdi(g.assignedTo):'atanmamis')+(g.dueDate?' - Son tarih: '+g.dueDate:'');
+      const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
+      const sel=document.createElement('select');['todo','doing','done'].forEach(st=>{const o=document.createElement('option');
+        o.value=st;o.textContent=DURUM_ETIKET[st];if(g.status===st)o.selected=true;sel.appendChild(o);});
+      sel.onchange=()=>gorevDurum(id,sel.value);alt.appendChild(sel);
+      if(g.createdBy===durum.uid||yoneticiMi()){const b=document.createElement('button');
+        b.className='ikincil kucuk';b.textContent='Sil';b.onclick=()=>gorevSil(id,g.title);alt.appendChild(b);}
+      li.appendChild(bas);li.appendChild(det);li.appendChild(alt);u.appendChild(li);});
+  }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Gorevler yuklenemedi.</li>';}
+}
+
+// ================== KASA ==================
+function kasaBaslat(){
+  secimDoldur($('kSube'),durum.subeler,'Sube secin...');
+  $('kTarih').value=bugun();
+  $('kForm').onsubmit=async(e)=>{
+    e.preventDefault();const h=$('kHata');h.textContent='';
+    const sube=$('kSube').value;const tarih=$('kTarih').value;const tutar=Number($('kTutar').value);
+    if(!sube){h.textContent='Lutfen sube secin.';return;}
+    if(!tarih){h.textContent='Lutfen tarih secin.';return;}
+    if($('kTutar').value===''||isNaN(tutar)||tutar<0){h.textContent='Lutfen gecerli bir tutar girin.';return;}
+    const btn=$('kKaydet');btn.disabled=true;
+    try{
+      const ref=await db.collection('cashEvents').add({
+        createdBy:durum.uid,createdByName:adim(),branchId:sube,date:tarih,amount:tutar,
+        direction:$('kYon').value,cameraChecked:$('kKamera').checked,
+        finding:$('kBulgu').value.trim(),resolved:false,createdAt:SUNUCU_ZAMAN()});
+      await logYaz('olusturma','Kasa/Kamera',ref.id,subeAdi(sube)+' / '+tutar+' '+YON_ETIKET[$('kYon').value]);
+      $('kTutar').value='';$('kBulgu').value='';$('kKamera').checked=false;await kasaCiz();
+    }catch(err){console.error(err);h.textContent='Kayit eklenemedi. Tekrar deneyin.';}
+    finally{btn.disabled=false;}
+  };
+  kasaCiz();
+}
+async function kasaCozum(id,cozuldu){
+  try{await db.collection('cashEvents').doc(id).update({resolved:cozuldu});
+    await logYaz('guncelleme','Kasa/Kamera',id,cozuldu?'cozuldu':'yeniden acildi');await kasaCiz();}
+  catch(err){console.error(err);$('kHata').textContent='Guncellenemedi.';}
+}
+async function kasaSil(id,ozet){
+  try{await db.collection('cashEvents').doc(id).delete();
+    await logYaz('silme','Kasa/Kamera',id,ozet);await kasaCiz();}
+  catch(err){console.error(err);$('kHata').textContent='Silinemedi. Yetkiniz olmayabilir.';}
+}
+async function kasaCiz(){
+  const u=$('kListe');
+  try{
+    const s=await db.collection('cashEvents').orderBy('date','desc').limit(50).get();
+    u.innerHTML='';
+    if(s.empty){u.innerHTML='<li class="bos-satir">Henuz kasa/kamera kaydi yok.</li>';return;}
+    s.forEach(doc=>{const o=doc.data();const id=doc.id;
+      const li=document.createElement('li');li.className='kayit-satiri';
+      const bas=document.createElement('div');bas.className='kayit-baslik';
+      bas.textContent=`${o.date} - ${subeAdi(o.branchId)} - ${o.amount} ${YON_ETIKET[o.direction]||''}`+(o.resolved?' (cozuldu)':' (acik)');
+      const det=document.createElement('div');det.className='kayit-detay';
+      det.textContent=(o.cameraChecked?'Kamera incelendi. ':'Kamera incelenmedi. ')+(o.finding?'Bulgu: '+o.finding:'Bulgu notu yok.');
+      const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
+      const c=document.createElement('button');c.className='ikincil kucuk';c.textContent=o.resolved?'Yeniden ac':'Cozuldu isaretle';
+      c.onclick=()=>kasaCozum(id,!o.resolved);alt.appendChild(c);
+      if(yoneticiMi()){const b=document.createElement('button');b.className='ikincil kucuk';b.textContent='Sil';
+        b.onclick=()=>kasaSil(id,bas.textContent);alt.appendChild(b);}
+      li.appendChild(bas);li.appendChild(det);li.appendChild(alt);u.appendChild(li);});
+  }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Kayitlar yuklenemedi.</li>';}
+}
+
+// ================== DENETIM IZI GORUNTULE ==================
+async function logCiz(){
+  const u=$('lListe');const h=$('lHata');h.textContent='';
+  try{
+    const s=await db.collection('auditLog').orderBy('at','desc').limit(100).get();
+    u.innerHTML='';
+    if(s.empty){u.innerHTML='<li class="bos-satir">Henuz kayit yok.</li>';return;}
+    s.forEach(doc=>{const k=doc.data();const li=document.createElement('li');li.className='kayit-satiri';
+      li.innerHTML=`<div class="kayit-baslik">${saatMetni(k.at)} - ${k.byName||''}</div>
+        <div class="kayit-detay">${k.entity||''} - ${k.action||''}${k.aciklama?' - '+k.aciklama:''}</div>`;
+      u.appendChild(li);});
+  }catch(err){console.error(err);h.textContent='Kayitlar yuklenemedi.';}
+}
+
+// ================== SUBELER ==================
+async function subeSeed(){
+  const btn=$('sKur');btn.disabled=true;$('sHata').textContent='';
+  try{
+    for(const b of DEFAULT_BRANCHES){
+      const ref=await db.collection('branches').add({name:b.name,order:b.order});
+      await logYaz('olusturma','Sube',ref.id,b.name);
+    }
+    await subeleriYukle();subeCiz();denetimBaslat();kasaBaslat();
+  }catch(err){console.error(err);$('sHata').textContent='Subeler olusturulamadi. Yetkinizi kontrol edin.';btn.disabled=false;}
+}
+function subeCiz(){
+  const u=$('sListe');u.innerHTML='';
+  if(durum.subeler.length===0){
+    $('sBos').classList.remove('gizli');
+    if(yoneticiMi()){$('sAdmin').classList.remove('gizli');}
+    return;
+  }
+  $('sBos').classList.add('gizli');
+  durum.subeler.forEach(s=>{const li=document.createElement('li');li.className='sube-oge';li.textContent=s.name;u.appendChild(li);});
+}
+
+// ================== BASLATMA ==================
+$('sKur').addEventListener('click',subeSeed);
+let baslatildi=false;
+auth.onAuthStateChanged(async(u)=>{
+  if(!u){
+    $('panel').classList.add('gizli');
+    $('girisSayfa').classList.remove('gizli');
+    baslatildi=false;
+    return;
+  }
+  $('girisSayfa').classList.add('gizli');
+  $('panel').classList.remove('gizli');
+  try{
+    durum.uid=u.uid;
+    durum.profil=await profiliHazirla(u);
+    $('kullaniciAdi').textContent=adim();
+    await subeleriYukle();
+    await kullanicilariYukle();
+    if(!baslatildi){ sekmeleriKur(); baslatildi=true; }
+    denetimBaslat();gorevBaslat();kasaBaslat();subeCiz();logCiz();
+  }catch(err){
+    console.error('[is-takip] baslatma',err);
+    $('genelHata').textContent='Bir sorun olustu. Sayfayi yenileyin.';
+  }
+});
+</script>
+</body>
+</html>
