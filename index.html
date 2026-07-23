@@ -9,7 +9,7 @@
   --renk-arka:#e7ede9;--renk-kart:#fff;--renk-ana:#1e9e66;--renk-ana-koyu:#178a56;
   --renk-metin:#1c2430;--renk-soluk:#6b7684;--renk-hata:#c0392b;--renk-cizgi:#e2e6ea;
   --golge:0 2px 8px rgba(0,0,0,.06);--yuvarlak:10px;
-  --yesil:#1e8e3e;--kirmizi:#d13438;--amber:#e37400;--gri:#9aa0a6;
+  --yesil:#1e8e3e;--kirmizi:#d13438;--amber:#e37400;--gri:#9aa0a6;--holiday:#5b6ee1;--kamera:#8e44ad;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
@@ -97,10 +97,12 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)
 .rota-tablo select{margin:0;padding:6px 4px;border:none;border-radius:6px;color:#fff;font-weight:700;
   width:100%;font-size:12px;text-align:center;text-align-last:center}
 .rh-mesai{background:var(--yesil)!important}.rh-oncall{background:var(--amber)!important}
-.rh-off{background:var(--gri)!important}
+.rh-off{background:var(--gri)!important}.rh-holiday{background:var(--holiday)!important}
 .rota-hucre{color:#fff;font-weight:700;border-radius:6px;padding:6px 4px;font-size:12px}
 .rota-gorev{display:block;margin:4px auto 0;max-width:100%;font-size:10px;font-weight:600;color:var(--renk-ana);
   background:#e7f5ee;border:1px solid #c5e6d5;border-radius:4px;padding:1px 4px;line-height:1.3;white-space:normal;word-break:break-word}
+.rota-kamera{display:block;margin:4px auto 0;max-width:100%;font-size:10px;font-weight:600;color:var(--kamera);
+  background:#f3e9f8;border:1px solid #e2cef0;border-radius:4px;padding:1px 4px;line-height:1.3;white-space:normal;word-break:break-word}
 .rota-tablo th .th-tarih{display:block;font-weight:500;font-size:11px;color:var(--renk-soluk);margin-top:2px}
 .mini-not{color:var(--renk-soluk);font-size:12px}
 /* Rota gezinme + gecen hafta ozeti */
@@ -212,6 +214,10 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)
           <div class="alan"><label>Tutar</label><input id="kTutar" type="number" min="0" step="0.01" /></div>
           <div class="alan"><label>Yon</label><select id="kYon"><option value="eksik">Eksik</option><option value="fazla">Fazla</option></select></div>
         </div>
+        <div class="form-satir">
+          <div class="alan"><label>Kamerayi inceleyecek kisi</label><select id="kAtanan"></select></div>
+          <div class="alan"><label>Inceleme tarihi (istege bagli)</label><input id="kIncelemeTarih" type="date" /></div>
+        </div>
         <label class="onay-satiri"><input id="kKamera" type="checkbox" /> Kamera incelendi</label>
         <label>Kamera bulgusu / not</label><textarea id="kBulgu" rows="2"></textarea>
         <p id="kHata" class="hata-mesaji"></p>
@@ -315,9 +321,10 @@ const ROTA_SECENEK=[
   {value:'off',label:'Off',css:'rh-off'},
   {value:'mesai',label:'Mesai',css:'rh-mesai'},
   {value:'oncall',label:'On Call',css:'rh-oncall'},
+  {value:'holiday',label:'Holiday',css:'rh-holiday'},
 ];
-const ROTA_CSS={off:'rh-off',mesai:'rh-mesai',oncall:'rh-oncall'};
-const ROTA_LABEL={off:'Off',mesai:'Mesai',oncall:'On Call'};
+const ROTA_CSS={off:'rh-off',mesai:'rh-mesai',oncall:'rh-oncall',holiday:'rh-holiday'};
+const ROTA_LABEL={off:'Off',mesai:'Mesai',oncall:'On Call',holiday:'Holiday'};
 // Hafta numaralandirma: bu tarihin (Pazartesi) haftasi "Hafta 1" sayilir.
 const ROTA_ILK_HAFTA='2026-07-20';
 const GUN_MS=86400000;            // 1 gun = 24*60*60*1000 ms
@@ -453,13 +460,20 @@ async function panoCiz(){
     gorevler=s.docs.map(d=>({id:d.id,...d.data()}));
     panoGorevleriCiz(gorevler);
   }catch(err){console.error(err);$('panoGorevler').innerHTML='<p class="bos-satir">Gorevler yuklenemedi.</p>';}
-  // Rota panosu (bu hafta) - gorevler ilgili gun hucresinde EXTRA gosterilir
+  // Kamera atamalari (bu hafta rota hucrelerinde EXTRA gosterilir)
+  let kameralar=[];
+  try{
+    const s=await db.collection('cashEvents').orderBy('date','desc').limit(100).get();
+    kameralar=s.docs.map(d=>({id:d.id,...d.data()}));
+  }catch(err){console.error(err);}
+  // Rota panosu (bu hafta) - gorev ve kamera atamalari ilgili gun hucresinde EXTRA gosterilir
   const rEl=$('panoRota');
   try{
     const snap=await db.collection('shifts').doc(hb).get();
     const plan=snap.exists&&snap.data().plan?snap.data().plan:{};
     const harita=rotaGorevHaritasi(gorevler,hb);
-    rEl.innerHTML='<p class="mini-not">'+haftaEtiket(hb)+'</p>'+rotaTabloHTML(plan,false,hb,harita);
+    const kameraHaritasi=rotaKameraHaritasi(kameralar,hb);
+    rEl.innerHTML='<p class="mini-not">'+haftaEtiket(hb)+'</p>'+rotaTabloHTML(plan,false,hb,harita,kameraHaritasi);
   }catch(err){console.error(err);rEl.innerHTML='<p class="bos-satir">Rota yuklenemedi.</p>';}
 }
 
@@ -502,11 +516,35 @@ function rotaGorevHaritasi(gorevler,weekStart){
   return harita;
 }
 
+// Kamera inceleme tarihi: reviewDate yoksa olay tarihi (date).
+function kameraTarihi(o){return o.reviewDate||o.date||null;}
+
+// Bu haftanin rota gun hucrelerine dusecek kamera atamalari.
+// Donen yapi: { rotaKisiAdi: { gunIndex: ['Kamera: <sube>', ...] } }
+function rotaKameraHaritasi(kayitlar,weekStart){
+  const harita={};
+  const gunler=gunTarihleri(weekStart);
+  kayitlar.forEach(o=>{
+    if(!o.assignedTo) return;
+    const kt=kameraTarihi(o);
+    if(!kt) return;
+    const gunIdx=gunler.indexOf(kt);
+    if(gunIdx<0) return;
+    const ad=kisiAdi(o.assignedTo);
+    const kisi=ROTA_KISILER.find(k=>k.toLowerCase()===ad.toLowerCase());
+    if(!kisi) return;
+    if(!harita[kisi]) harita[kisi]={};
+    if(!harita[kisi][gunIdx]) harita[kisi][gunIdx]=[];
+    harita[kisi][gunIdx].push('Kamera: '+subeAdi(o.branchId));
+  });
+  return harita;
+}
+
 // Rota tablosu HTML uretir. duzenlenebilir=true ise select'ler, degilse renkli hucreler.
 // weekStart verilirse her gun basligina o gunun tarihi (GG.AA) eklenir.
 // gorevHaritasi SADECE dashboard panosunda verilir; gun hucresine gorevleri extra ekler.
 // (Normal Rota sekmesinde bu parametre verilmez, dolayisiyla gorev gosterilmez.)
-function rotaTabloHTML(plan,duzenlenebilir,weekStart,gorevHaritasi){
+function rotaTabloHTML(plan,duzenlenebilir,weekStart,gorevHaritasi,kameraHaritasi){
   const tarihler=weekStart?gunTarihleri(weekStart):null;
   let h='<table class="rota-tablo"><tr><th>Kisi</th>';
   ROTA_GUNLER.forEach((g,i)=>{
@@ -526,6 +564,9 @@ function rotaTabloHTML(plan,duzenlenebilir,weekStart,gorevHaritasi){
         let hucre='<span class="rota-hucre '+ROTA_CSS[deger]+'">'+ROTA_LABEL[deger]+'</span>';
         if(gorevHaritasi&&gorevHaritasi[kisi]&&gorevHaritasi[kisi][i]){
           gorevHaritasi[kisi][i].forEach(t=>{hucre+='<span class="rota-gorev">'+esc(t)+'</span>';});
+        }
+        if(kameraHaritasi&&kameraHaritasi[kisi]&&kameraHaritasi[kisi][i]){
+          kameraHaritasi[kisi][i].forEach(t=>{hucre+='<span class="rota-kamera">'+esc(t)+'</span>';});
         }
         h+='<td>'+hucre+'</td>';
       }
@@ -608,12 +649,13 @@ async function rotaHaftaKaydir(gunFarki){
 function rotaOzetHesapla(plan){
   const ozet={};
   ROTA_KISILER.forEach(k=>{
-    const say={mesai:0,oncall:0,off:0};
+    const say={mesai:0,oncall:0,off:0,holiday:0};
     const dizi=(plan&&plan[k])||[];
     for(let i=0;i<HAFTA_GUN_SAYISI;i++){
       const d=dizi[i]||'off';
       if(d==='mesai') say.mesai++;
       else if(d==='oncall') say.oncall++;
+      else if(d==='holiday') say.holiday++;
       else say.off++;
     }
     ozet[k]=say;
@@ -622,12 +664,13 @@ function rotaOzetHesapla(plan){
 }
 
 function rotaOzetHTML(ozet){
-  let h='<table class="ozet-tablo"><tr><th>Kisi</th><th>Mesai</th><th>On Call</th><th>Off</th></tr>';
+  let h='<table class="ozet-tablo"><tr><th>Kisi</th><th>Mesai</th><th>On Call</th><th>Holiday</th><th>Off</th></tr>';
   ROTA_KISILER.forEach(k=>{
     const o=ozet[k];
     h+='<tr><td class="kisi">'+k+'</td>'+
        '<td><span class="ozet-rakam" style="color:var(--yesil)">'+o.mesai+'</span></td>'+
        '<td><span class="ozet-rakam" style="color:var(--amber)">'+o.oncall+'</span></td>'+
+       '<td><span class="ozet-rakam" style="color:var(--holiday)">'+o.holiday+'</span></td>'+
        '<td><span class="ozet-rakam" style="color:var(--gri)">'+o.off+'</span></td></tr>';
   });
   h+='</table>';
@@ -742,6 +785,7 @@ async function gorevCiz(){
 // ================== KASA ==================
 function kasaBaslat(){
   secimDoldur($('kSube'),durum.subeler,'Sube secin...');
+  secimDoldur($('kAtanan'),durum.kullanicilar,'Kime atanacak?');
   $('kTarih').value=bugun();
   $('kForm').onsubmit=async(e)=>{
     e.preventDefault();const h=$('kHata');h.textContent='';
@@ -754,9 +798,11 @@ function kasaBaslat(){
       const ref=await db.collection('cashEvents').add({
         createdBy:durum.uid,createdByName:adim(),branchId:sube,date:tarih,amount:tutar,
         direction:$('kYon').value,cameraChecked:$('kKamera').checked,
+        assignedTo:$('kAtanan').value||null,reviewDate:$('kIncelemeTarih').value||null,
         finding:$('kBulgu').value.trim(),resolved:false,createdAt:SUNUCU_ZAMAN()});
       await logYaz('olusturma','Kasa/Kamera',ref.id,subeAdi(sube)+' / '+tutar+' '+YON_ETIKET[$('kYon').value]);
-      $('kTutar').value='';$('kBulgu').value='';$('kKamera').checked=false;await kasaCiz();
+      $('kTutar').value='';$('kBulgu').value='';$('kKamera').checked=false;
+      $('kAtanan').value='';$('kIncelemeTarih').value='';await kasaCiz();
     }catch(err){console.error(err);h.textContent='Kayit eklenemedi. Tekrar deneyin.';}
     finally{btn.disabled=false;}
   };
@@ -784,12 +830,14 @@ async function kasaCiz(){
       bas.textContent=`${o.date} - ${subeAdi(o.branchId)} - ${o.amount} ${YON_ETIKET[o.direction]||''}`+(o.resolved?' (cozuldu)':' (acik)');
       const det=document.createElement('div');det.className='kayit-detay';
       det.textContent=(o.cameraChecked?'Kamera incelendi. ':'Kamera incelenmedi. ')+(o.finding?'Bulgu: '+o.finding:'Bulgu notu yok.');
+      const ata=document.createElement('div');ata.className='kayit-alt';
+      ata.textContent='Kamera atanan: '+(o.assignedTo?kisiAdi(o.assignedTo):'atanmamis')+(kameraTarihi(o)?' - Inceleme tarihi: '+kameraTarihi(o):'');
       const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
       const c=document.createElement('button');c.className='ikincil kucuk';c.textContent=o.resolved?'Yeniden ac':'Cozuldu isaretle';
       c.onclick=()=>kasaCozum(id,!o.resolved);alt.appendChild(c);
       if(yoneticiMi()){const b=document.createElement('button');b.className='ikincil kucuk';b.textContent='Sil';
         b.onclick=()=>kasaSil(id,bas.textContent);alt.appendChild(b);}
-      li.appendChild(bas);li.appendChild(det);li.appendChild(alt);u.appendChild(li);});
+      li.appendChild(bas);li.appendChild(det);li.appendChild(ata);li.appendChild(alt);u.appendChild(li);});
   }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Kayitlar yuklenemedi.</li>';}
 }
 
