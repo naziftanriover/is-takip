@@ -6,7 +6,7 @@
 <title>Is Takip</title>
 <style>
 :root{
-  --renk-arka:#f1f6f3;--renk-kart:#fff;--renk-ana:#1e9e66;--renk-ana-koyu:#178a56;
+  --renk-arka:#e7ede9;--renk-kart:#fff;--renk-ana:#1e9e66;--renk-ana-koyu:#178a56;
   --renk-metin:#1c2430;--renk-soluk:#6b7684;--renk-hata:#c0392b;--renk-cizgi:#e2e6ea;
   --golge:0 2px 8px rgba(0,0,0,.06);--yuvarlak:10px;
   --yesil:#1e8e3e;--kirmizi:#d13438;--amber:#e37400;--gri:#9aa0a6;
@@ -27,9 +27,12 @@ button{cursor:pointer;font-size:15px;font-weight:600;border:none;border-radius:8
 button:hover{background:var(--renk-ana-koyu)}
 button:disabled{opacity:.6;cursor:default}
 .tam-genislik{width:100%}
-.ust-bar{background:var(--renk-kart);border-bottom:1px solid var(--renk-cizgi);padding:12px 20px;
-  display:flex;align-items:center;justify-content:space-between}
-.marka{font-weight:700}.kullanici{color:var(--renk-soluk);font-size:14px}
+.ust-bar{background:linear-gradient(90deg,#178a56,#1e9e66);border-bottom:none;padding:14px 22px;
+  display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 6px rgba(0,0,0,.12)}
+.marka{font-weight:700;color:#fff;font-size:17px;letter-spacing:.3px}
+.kullanici{color:rgba(255,255,255,.9);font-size:14px}
+.ust-bar .ikincil{color:#fff;border-color:rgba(255,255,255,.75);background:transparent}
+.ust-bar .ikincil:hover{background:rgba(255,255,255,.16)}
 .ust-sag{display:flex;align-items:center;gap:12px}
 .ikincil{background:transparent;color:var(--renk-ana);border:1px solid var(--renk-ana)}
 .ikincil:hover{background:#e7f5ee}
@@ -52,7 +55,7 @@ button:disabled{opacity:.6;cursor:default}
   .sekme-btn.aktif{border-left:none;border-bottom-color:var(--renk-ana);background:transparent}
   .icerik{margin:16px}
 }
-h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px}
+h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 .kart-form{background:var(--renk-kart);border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);
   box-shadow:var(--golge);padding:18px 16px;margin-bottom:20px}
 .form-satir{display:flex;flex-wrap:wrap;gap:14px}.form-satir .alan{flex:1 1 180px}
@@ -87,6 +90,7 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px}
 /* Rota tablosu */
 .rota-tablo{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
 .rota-tablo th,.rota-tablo td{border:1px solid var(--renk-cizgi);padding:6px 4px;text-align:center;vertical-align:middle}
+.rota-tablo td{height:58px}
 .rota-tablo th:first-child,.rota-tablo td.kisi{width:112px}
 .rota-tablo th{background:#f0f3f7;font-weight:700}
 .rota-tablo td.kisi{font-weight:700;text-align:left;padding-left:8px;background:#fafbfc}
