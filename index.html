@@ -34,13 +34,24 @@ button:disabled{opacity:.6;cursor:default}
 .ikincil{background:transparent;color:var(--renk-ana);border:1px solid var(--renk-ana)}
 .ikincil:hover{background:#eaf1fd}
 .ikincil.kucuk,.kucuk{padding:6px 10px;font-size:13px}
-.sekme-bar{display:flex;flex-wrap:wrap;gap:4px;background:var(--renk-kart);
-  border-bottom:1px solid var(--renk-cizgi);padding:6px 12px 0}
-.sekme-btn{background:transparent;color:var(--renk-soluk);border:none;border-bottom:3px solid transparent;
-  border-radius:0;padding:10px 14px;font-weight:600}
+/* Sol kenar menu + tam genislik icerik */
+.govde{display:flex;align-items:stretch}
+.sekme-bar{display:flex;flex-direction:column;gap:2px;background:var(--renk-kart);
+  border-right:1px solid var(--renk-cizgi);padding:12px 8px;width:190px;flex-shrink:0;
+  position:sticky;top:0;align-self:flex-start;min-height:calc(100vh - 52px)}
+.sekme-btn{background:transparent;color:var(--renk-soluk);border:none;border-left:3px solid transparent;
+  border-radius:0 6px 6px 0;padding:10px 12px;font-weight:600;text-align:left;width:100%}
 .sekme-btn:hover{background:#f0f3f7}
-.sekme-btn.aktif{color:var(--renk-ana);border-bottom-color:var(--renk-ana)}
-.icerik{max-width:820px;margin:20px auto;padding:0 16px}
+.sekme-btn.aktif{color:var(--renk-ana);border-left-color:var(--renk-ana);background:#eaf1fd}
+.icerik{flex:1;min-width:0;margin:20px 24px;padding:0}
+@media(max-width:640px){
+  .govde{flex-direction:column}
+  .sekme-bar{flex-direction:row;flex-wrap:wrap;width:auto;border-right:none;
+    border-bottom:1px solid var(--renk-cizgi);position:static;min-height:0;padding:6px 8px}
+  .sekme-btn{width:auto;border-left:none;border-bottom:3px solid transparent;border-radius:0}
+  .sekme-btn.aktif{border-left:none;border-bottom-color:var(--renk-ana);background:transparent}
+  .icerik{margin:16px}
+}
 h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px}
 .kart-form{background:var(--renk-kart);border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);
   box-shadow:var(--golge);padding:18px 16px;margin-bottom:20px}
@@ -127,6 +138,7 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px}
   </header>
   <p id="genelHata" class="hata-mesaji" style="text-align:center;margin:8px 16px 0"></p>
 
+  <div class="govde">
   <nav class="sekme-bar">
     <button class="sekme-btn aktif" data-hedef="sekme-pano" type="button">Dashboard</button>
     <button class="sekme-btn" data-hedef="sekme-denetim" type="button">Gunluk Denetim</button>
@@ -252,6 +264,7 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px}
       </div>
     </section>
   </main>
+  </div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
