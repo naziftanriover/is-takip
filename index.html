@@ -83,6 +83,8 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px}
 .rh-mesai{background:var(--yesil)!important}.rh-oncall{background:var(--amber)!important}
 .rh-off{background:var(--gri)!important}
 .rota-hucre{color:#fff;font-weight:700;border-radius:6px;padding:6px 4px;font-size:12px}
+.rota-gorev{display:block;margin-top:3px;font-size:10px;font-weight:600;color:var(--renk-ana);
+  background:#eaf1fd;border:1px solid #cfe0fb;border-radius:4px;padding:1px 4px;line-height:1.3;white-space:normal}
 .rota-tablo th .th-tarih{display:block;font-weight:500;font-size:11px;color:var(--renk-soluk);margin-top:2px}
 .mini-not{color:var(--renk-soluk);font-size:12px}
 /* Rota gezinme + gecen hafta ozeti */
@@ -173,7 +175,7 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px}
         <label>Gorev</label><input id="gBaslik" type="text" maxlength="120" />
         <div class="form-satir">
           <div class="alan"><label>Atanan kisi</label><select id="gAtanan"></select></div>
-          <div class="alan"><label>Son tarih (istege bagli)</label><input id="gTarih" type="date" /></div>
+          <div class="alan"><label>Gorev tarihi (istege bagli)</label><input id="gTarih" type="date" /></div>
         </div>
         <p id="gHata" class="hata-mesaji"></p>
         <button id="gKaydet" type="submit">Gorev Ekle</button>
@@ -425,36 +427,68 @@ async function kullanicilariYukle(){
 
 // ================== DASHBOARD ==================
 async function panoCiz(){
-  // Gorevler
-  const gEl=$('panoGorevler');
+  const hb=haftaBasi(bugun());
+  // Gorevleri bir kez cek (hem gorev paneli hem rota panosu kullanir)
+  let gorevler=[];
   try{
     const s=await db.collection('tasks').orderBy('createdAt','desc').limit(100).get();
-    if(s.empty){gEl.innerHTML='<p class="bos-satir">Henuz gorev yok.</p>';}
-    else{
-      let html='';
-      s.forEach(doc=>{const g=doc.data();
-        const bitti=g.status==='done';
-        html+=`<div class="gorev-satiri"><span><span class="nokta ${bitti?'yesil':'kirmizi'}"></span>`+
-          `<b>${esc(g.assignedTo?kisiAdi(g.assignedTo):'atanmamis')}</b> - ${esc(g.title)}`+
-          `${g.dueDate?' <span class="mini-not">('+esc(g.dueDate)+')</span>':''}</span>`+
-          `<span class="rozet ${bitti?'yesil':'kirmizi'}">${bitti?'Yapildi':'Yapilmadi'}</span></div>`;
-      });
-      gEl.innerHTML=html;
-    }
-  }catch(err){console.error(err);gEl.innerHTML='<p class="bos-satir">Gorevler yuklenemedi.</p>';}
-  // Rota (bu hafta)
+    gorevler=s.docs.map(d=>({id:d.id,...d.data()}));
+    panoGorevleriCiz(gorevler);
+  }catch(err){console.error(err);$('panoGorevler').innerHTML='<p class="bos-satir">Gorevler yuklenemedi.</p>';}
+  // Rota panosu (bu hafta) - gorevler ilgili gun hucresinde EXTRA gosterilir
   const rEl=$('panoRota');
   try{
-    const hb=haftaBasi(bugun());
     const snap=await db.collection('shifts').doc(hb).get();
     const plan=snap.exists&&snap.data().plan?snap.data().plan:{};
-    rEl.innerHTML='<p class="mini-not">'+haftaEtiket(hb)+'</p>'+rotaTabloHTML(plan,false,hb);
+    const harita=rotaGorevHaritasi(gorevler,hb);
+    rEl.innerHTML='<p class="mini-not">'+haftaEtiket(hb)+'</p>'+rotaTabloHTML(plan,false,hb,harita);
   }catch(err){console.error(err);rEl.innerHTML='<p class="bos-satir">Rota yuklenemedi.</p>';}
+}
+
+// Gorev tarihi: yeni kayitlarda 'taskDate', eski kayitlar icin 'dueDate' geriye donuk destek.
+function gorevTarihi(g){return g.taskDate||g.dueDate||null;}
+
+// Dashboard gorev panelini cizer.
+function panoGorevleriCiz(gorevler){
+  const gEl=$('panoGorevler');
+  if(!gorevler.length){gEl.innerHTML='<p class="bos-satir">Henuz gorev yok.</p>';return;}
+  let html='';
+  gorevler.forEach(g=>{
+    const bitti=g.status==='done';
+    const gt=gorevTarihi(g);
+    html+=`<div class="gorev-satiri"><span><span class="nokta ${bitti?'yesil':'kirmizi'}"></span>`+
+      `<b>${esc(g.assignedTo?kisiAdi(g.assignedTo):'atanmamis')}</b> - ${esc(g.title)}`+
+      `${gt?' <span class="mini-not">('+esc(gt)+')</span>':''}</span>`+
+      `<span class="rozet ${bitti?'yesil':'kirmizi'}">${bitti?'Yapildi':'Yapilmadi'}</span></div>`;
+  });
+  gEl.innerHTML=html;
+}
+
+// Bu haftanin rota gun hucrelerine dusecek gorevleri kisi+gun'e gore haritalar.
+// Donen yapi: { rotaKisiAdi: { gunIndex: [gorevBasligi, ...] } }
+function rotaGorevHaritasi(gorevler,weekStart){
+  const harita={};
+  const gunler=gunTarihleri(weekStart);
+  gorevler.forEach(g=>{
+    const gt=gorevTarihi(g);
+    if(!gt) return;
+    const gunIdx=gunler.indexOf(gt);
+    if(gunIdx<0) return;                                  // bu haftaya ait degil
+    const ad=g.assignedTo?kisiAdi(g.assignedTo):'';
+    const kisi=ROTA_KISILER.find(k=>k.toLowerCase()===ad.toLowerCase());
+    if(!kisi) return;                                     // rota satirlarindan biri degil
+    if(!harita[kisi]) harita[kisi]={};
+    if(!harita[kisi][gunIdx]) harita[kisi][gunIdx]=[];
+    harita[kisi][gunIdx].push(g.title);
+  });
+  return harita;
 }
 
 // Rota tablosu HTML uretir. duzenlenebilir=true ise select'ler, degilse renkli hucreler.
 // weekStart verilirse her gun basligina o gunun tarihi (GG.AA) eklenir.
-function rotaTabloHTML(plan,duzenlenebilir,weekStart){
+// gorevHaritasi SADECE dashboard panosunda verilir; gun hucresine gorevleri extra ekler.
+// (Normal Rota sekmesinde bu parametre verilmez, dolayisiyla gorev gosterilmez.)
+function rotaTabloHTML(plan,duzenlenebilir,weekStart,gorevHaritasi){
   const tarihler=weekStart?gunTarihleri(weekStart):null;
   let h='<table class="rota-tablo"><tr><th>Kisi</th>';
   ROTA_GUNLER.forEach((g,i)=>{
@@ -471,7 +505,11 @@ function rotaTabloHTML(plan,duzenlenebilir,weekStart){
         ROTA_SECENEK.forEach(o=>{h+='<option value="'+o.value+'"'+(o.value===deger?' selected':'')+'>'+o.label+'</option>';});
         h+='</select></td>';
       }else{
-        h+='<td><span class="rota-hucre '+ROTA_CSS[deger]+'">'+ROTA_LABEL[deger]+'</span></td>';
+        let hucre='<span class="rota-hucre '+ROTA_CSS[deger]+'">'+ROTA_LABEL[deger]+'</span>';
+        if(gorevHaritasi&&gorevHaritasi[kisi]&&gorevHaritasi[kisi][i]){
+          gorevHaritasi[kisi][i].forEach(t=>{hucre+='<span class="rota-gorev">'+esc(t)+'</span>';});
+        }
+        h+='<td>'+hucre+'</td>';
       }
     }
     h+='</tr>';
@@ -643,7 +681,7 @@ function gorevBaslat(){
     try{
       const ref=await db.collection('tasks').add({
         createdBy:durum.uid,createdByName:adim(),title:baslik,
-        assignedTo:$('gAtanan').value||null,dueDate:$('gTarih').value||null,
+        assignedTo:$('gAtanan').value||null,taskDate:$('gTarih').value||null,
         status:'todo',createdAt:SUNUCU_ZAMAN()});
       await logYaz('olusturma','Gorev',ref.id,baslik);
       $('gBaslik').value='';$('gTarih').value='';$('gAtanan').value='';await gorevCiz();
@@ -672,7 +710,7 @@ async function gorevCiz(){
       const li=document.createElement('li');li.className='kayit-satiri';
       const bas=document.createElement('div');bas.className='kayit-baslik';bas.textContent=g.title;
       const det=document.createElement('div');det.className='kayit-detay';
-      det.textContent='Atanan: '+(g.assignedTo?kisiAdi(g.assignedTo):'atanmamis')+(g.dueDate?' - Son tarih: '+g.dueDate:'');
+      det.textContent='Atanan: '+(g.assignedTo?kisiAdi(g.assignedTo):'atanmamis')+(gorevTarihi(g)?' - Gorev tarihi: '+gorevTarihi(g):'');
       const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
       const sel=document.createElement('select');['todo','doing','done'].forEach(st=>{const o=document.createElement('option');
         o.value=st;o.textContent=DURUM_ETIKET[st];if(g.status===st)o.selected=true;sel.appendChild(o);});
