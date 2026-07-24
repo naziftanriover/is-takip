@@ -116,6 +116,16 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)
 .ozet-tablo th{background:#f0f3f7;font-weight:700}
 .ozet-tablo td.kisi{text-align:left;font-weight:700}
 .ozet-rakam{font-weight:700}
+/* Fotograf galerisi + aylik rapor */
+.foto-galeri{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.foto-kucuk{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--renk-cizgi);cursor:pointer}
+.foto-btn{cursor:pointer;display:inline-block}
+.rapor-liste{list-style:none;padding:0;margin:6px 0;display:grid;gap:10px}
+.rapor-liste li{border-bottom:1px solid var(--renk-cizgi);padding-bottom:8px;font-size:14px}
+.rapor-liste li:last-child{border-bottom:none;padding-bottom:0}
+.rapor-tarih{font-weight:700}
+.rapor-etiket{display:inline-block;font-size:11px;font-weight:700;color:#fff;border-radius:10px;padding:1px 8px;margin:0 4px}
+.rapor-gorev{background:var(--renk-ana)}.rapor-kamera{background:var(--kamera)}.rapor-denetim{background:var(--amber)}
 </style>
 </head>
 <body>
@@ -152,6 +162,7 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)
     <button class="sekme-btn" data-hedef="sekme-gorevler" type="button">Gorevler</button>
     <button class="sekme-btn" data-hedef="sekme-kasa" type="button">Kasa &amp; Kamera</button>
     <button class="sekme-btn" data-hedef="sekme-rota" type="button">Rota</button>
+    <button class="sekme-btn" data-hedef="sekme-rapor" type="button">Aylik Rapor</button>
     <button class="sekme-btn" data-hedef="sekme-log" type="button">Denetim Izi</button>
     <button class="sekme-btn" data-hedef="sekme-subeler" type="button">Subeler</button>
   </nav>
@@ -252,6 +263,17 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- AYLIK RAPOR -->
+    <section id="sekme-rapor" class="sekme-bolum gizli">
+      <h2>Aylik Rapor</h2>
+      <div class="kart-form">
+        <div class="form-satir">
+          <div class="alan"><label>Ay</label><input id="raporAy" type="month" /></div>
+        </div>
+      </div>
+      <div id="raporIcerik"><p class="bos-satir">Yukleniyor...</p></div>
     </section>
 
     <!-- DENETIM IZI -->
@@ -428,6 +450,7 @@ function sekmeleriKur(){
     if(b.dataset.hedef==='sekme-log') logCiz();
     if(b.dataset.hedef==='sekme-pano') panoCiz();
     if(b.dataset.hedef==='sekme-rota') rotaYukle();
+    if(b.dataset.hedef==='sekme-rapor') raporCiz();
   }));
 }
 
@@ -761,25 +784,145 @@ async function gorevSil(id,baslik){
     await logYaz('silme','Gorev',id,baslik);await gorevCiz();}
   catch(err){console.error(err);$('gHata').textContent='Gorev silinemedi. Yetkiniz olmayabilir.';}
 }
+// ---- Fotograf (hatali odeme) yardimcilari ----
+const FOTO_MAX_KENAR=1200;    // px: buyuk kenar bu boyuta kuculur
+const FOTO_MAX_URL=900000;    // dataURL uzunluk ust siniri (~675KB ikili, Firestore 1MB altinda kalir)
+// Secilen resmi tarayicida kucultup JPEG dataURL dondurur.
+function resimKucult(file){
+  return new Promise((resolve,reject)=>{
+    const okuyucu=new FileReader();
+    okuyucu.onerror=()=>reject(new Error('okunamadi'));
+    okuyucu.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('gecersiz resim'));
+      img.onload=()=>{
+        const oran=Math.min(1,FOTO_MAX_KENAR/Math.max(img.width,img.height));
+        const g=Math.max(1,Math.round(img.width*oran)),y=Math.max(1,Math.round(img.height*oran));
+        const c=document.createElement('canvas');c.width=g;c.height=y;
+        c.getContext('2d').drawImage(img,0,0,g,y);
+        let kalite=0.7,url=c.toDataURL('image/jpeg',kalite);
+        while(url.length>FOTO_MAX_URL&&kalite>0.3){kalite-=0.1;url=c.toDataURL('image/jpeg',kalite);}
+        resolve(url);
+      };
+      img.src=okuyucu.result;
+    };
+    okuyucu.readAsDataURL(file);
+  });
+}
+// Tum fotograflari cekip gorev id'sine gore gruplar.
+async function gorevFotoHaritasi(){
+  const harita={};
+  try{
+    const s=await db.collection('photos').orderBy('createdAt','desc').limit(400).get();
+    s.forEach(doc=>{const f=doc.data();if(!f.taskId)return;
+      if(!harita[f.taskId]) harita[f.taskId]=[];
+      harita[f.taskId].push({id:doc.id,...f});});
+  }catch(err){console.error(err);}
+  return harita;
+}
+// Bir goreve hatali odeme fotografi ekler (Firestore'da saklanir).
+async function gorevFotoEkle(taskId,file){
+  const h=$('gHata');h.style.color='';h.textContent='Foto yukleniyor...';
+  if(!file.type||file.type.indexOf('image/')!==0){h.textContent='Lutfen bir resim dosyasi secin.';return;}
+  try{
+    const dataUrl=await resimKucult(file);
+    if(dataUrl.length>1000000){h.textContent='Resim cok buyuk, daha kucuk bir resim secin.';return;}
+    await db.collection('photos').add({
+      taskId:taskId,uploadedBy:durum.uid,uploadedByName:adim(),dataUrl:dataUrl,createdAt:SUNUCU_ZAMAN()});
+    await logYaz('olusturma','Foto',taskId,'hatali odeme fotografi');
+    h.textContent='';await gorevCiz();
+  }catch(err){console.error(err);h.style.color='';h.textContent='Foto yuklenemedi. Tekrar deneyin.';}
+}
+
 async function gorevCiz(){
   const u=$('gListe');
   try{
     const s=await db.collection('tasks').orderBy('createdAt','desc').limit(50).get();
+    const fotoHarita=await gorevFotoHaritasi();
     u.innerHTML='';
     if(s.empty){u.innerHTML='<li class="bos-satir">Henuz gorev yok.</li>';return;}
-    s.forEach(doc=>{const g=doc.data();const id=doc.id;
+    s.forEach(doc=>{const g=doc.data();const id=doc.id;const fotolar=fotoHarita[id]||[];
       const li=document.createElement('li');li.className='kayit-satiri';
       const bas=document.createElement('div');bas.className='kayit-baslik';bas.textContent=g.title;
       const det=document.createElement('div');det.className='kayit-detay';
       det.textContent='Atanan: '+(g.assignedTo?kisiAdi(g.assignedTo):'atanmamis')+(gorevTarihi(g)?' - Gorev tarihi: '+gorevTarihi(g):'');
+      const say=document.createElement('div');say.className='kayit-alt';
+      say.innerHTML='<b>Hatali odeme (foto): '+fotolar.length+'</b>'+(g.status==='done'?' - Gorev bitti':'');
+      li.appendChild(bas);li.appendChild(det);li.appendChild(say);
+      if(fotolar.length){const galeri=document.createElement('div');galeri.className='foto-galeri';
+        fotolar.forEach(f=>{const a=document.createElement('a');a.href=f.dataUrl;a.target='_blank';
+          const im=document.createElement('img');im.src=f.dataUrl;im.className='foto-kucuk';im.alt='hatali odeme';
+          a.appendChild(im);galeri.appendChild(a);});li.appendChild(galeri);}
+      const yuk=document.createElement('div');yuk.className='kayit-alt';
+      const lbl=document.createElement('label');lbl.className='ikincil kucuk foto-btn';lbl.textContent='+ Foto ekle';
+      const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.style.display='none';
+      inp.onchange=()=>{if(inp.files&&inp.files[0]) gorevFotoEkle(id,inp.files[0]);};
+      lbl.appendChild(inp);yuk.appendChild(lbl);li.appendChild(yuk);
       const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
       const sel=document.createElement('select');['todo','doing','done'].forEach(st=>{const o=document.createElement('option');
         o.value=st;o.textContent=DURUM_ETIKET[st];if(g.status===st)o.selected=true;sel.appendChild(o);});
       sel.onchange=()=>gorevDurum(id,sel.value);alt.appendChild(sel);
       if(g.createdBy===durum.uid||yoneticiMi()){const b=document.createElement('button');
         b.className='ikincil kucuk';b.textContent='Sil';b.onclick=()=>gorevSil(id,g.title);alt.appendChild(b);}
-      li.appendChild(bas);li.appendChild(det);li.appendChild(alt);u.appendChild(li);});
+      li.appendChild(alt);u.appendChild(li);});
   }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Gorevler yuklenemedi.</li>';}
+}
+
+// ================== AYLIK RAPOR ==================
+function ayBugun(){return bugun().slice(0,7);}   // 'YYYY-AA'
+async function raporCiz(){
+  const el=$('raporIcerik');
+  if(!$('raporAy').value) $('raporAy').value=ayBugun();
+  const ay=$('raporAy').value;
+  el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
+  try{
+    const [gorevSnap,kasaSnap,denetimSnap,fotoHarita]=await Promise.all([
+      db.collection('tasks').get(),
+      db.collection('cashEvents').get(),
+      db.collection('dailyAudits').get(),
+      gorevFotoHaritasi()
+    ]);
+    const gorevler=gorevSnap.docs.map(d=>({id:d.id,...d.data()}));
+    const kasalar=kasaSnap.docs.map(d=>({id:d.id,...d.data()}));
+    const denetimler=denetimSnap.docs.map(d=>({id:d.id,...d.data()}));
+    const ayMi=t=>!!t&&String(t).slice(0,7)===ay;
+    const esitAd=(a,b)=>String(a||'').toLowerCase()===String(b||'').toLowerCase();
+    let html='';
+    ROTA_KISILER.forEach(kisi=>{
+      const satirlar=[];
+      gorevler.forEach(g=>{const t=gorevTarihi(g);if(!ayMi(t))return;
+        if(!esitAd(g.assignedTo?kisiAdi(g.assignedTo):'',kisi))return;
+        const fl=fotoHarita[g.id]||[];
+        satirlar.push({tarih:t,tur:'Gorev',metin:esc(g.title)+' ['+(DURUM_ETIKET[g.status]||g.status)+'] - Hatali odeme foto: '+fl.length,fotolar:fl});
+      });
+      kasalar.forEach(o=>{const t=kameraTarihi(o);if(!ayMi(t))return;
+        if(!esitAd(o.assignedTo?kisiAdi(o.assignedTo):'',kisi))return;
+        const bulgu=o.cameraChecked?(o.finding?('kamerada bulgu: '+esc(o.finding)):'kamera incelendi, ozel bulgu yok'):'kamera henuz incelenmedi';
+        satirlar.push({tarih:t,tur:'Kamera',metin:esc(subeAdi(o.branchId))+' - '+esc(o.amount)+' '+(YON_ETIKET[o.direction]||'')+' - '+bulgu+(o.resolved?' (cozuldu)':' (acik)'),fotolar:[]});
+      });
+      denetimler.forEach(k=>{if(!ayMi(k.date))return;
+        if(!esitAd(k.createdByName,kisi))return;
+        satirlar.push({tarih:k.date,tur:'Denetim',metin:esc(subeAdi(k.branchId))+' - '+esc(denetimOzet(k.checks)),fotolar:[]});
+      });
+      satirlar.sort((a,b)=>String(a.tarih).localeCompare(String(b.tarih)));
+      html+='<div class="pano-kart"><h3 style="margin-top:0">'+kisi+'</h3>';
+      if(!satirlar.length){html+='<p class="bos-satir">Bu ay kayit yok.</p>';}
+      else{
+        html+='<ul class="rapor-liste">';
+        satirlar.forEach(r=>{
+          html+='<li><span class="rapor-tarih">'+(r.tarih?uzunTarih(r.tarih):'-')+'</span> '+
+            '<span class="rapor-etiket rapor-'+r.tur.toLowerCase()+'">'+r.tur+'</span> '+r.metin;
+          if(r.fotolar&&r.fotolar.length){html+='<div class="foto-galeri">';
+            r.fotolar.forEach(f=>{html+='<a href="'+f.dataUrl+'" target="_blank"><img class="foto-kucuk" src="'+f.dataUrl+'" alt="foto"></a>';});
+            html+='</div>';}
+          html+='</li>';
+        });
+        html+='</ul>';
+      }
+      html+='</div>';
+    });
+    el.innerHTML=html;
+  }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Rapor yuklenemedi.</p>';}
 }
 
 // ================== KASA ==================
@@ -883,6 +1026,7 @@ $('rKaydet').addEventListener('click',rotaKaydet);
 $('rTarih').addEventListener('change',rotaYukle);
 $('rOnceki').addEventListener('click',()=>rotaHaftaKaydir(-HAFTA_GUN_SAYISI));
 $('rSonraki').addEventListener('click',()=>rotaHaftaKaydir(HAFTA_GUN_SAYISI));
+$('raporAy').addEventListener('change',raporCiz);
 let baslatildi=false;
 auth.onAuthStateChanged(async(u)=>{
   if(!u){
