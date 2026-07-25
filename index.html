@@ -37,6 +37,10 @@ button:disabled{opacity:.6;cursor:default}
 .ust-bar .ikincil{color:#fff;border-color:rgba(255,255,255,.75);background:transparent}
 .ust-bar .ikincil:hover{background:rgba(255,255,255,.16)}
 .ust-sag{display:flex;align-items:center;gap:12px}
+.ust-sol{display:flex;align-items:center;gap:10px}
+.menu-btn{display:none;background:transparent;border:none;color:#fff;font-size:22px;line-height:1;padding:2px 8px;cursor:pointer}
+.menu-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:150}
+.menu-overlay.acik{display:block}
 .ikincil{background:transparent;color:var(--renk-ana);border:1px solid var(--renk-ana)}
 .ikincil:hover{background:var(--renk-tint)}
 .ikincil.kucuk,.kucuk{padding:6px 10px;font-size:13px}
@@ -53,11 +57,15 @@ button:disabled{opacity:.6;cursor:default}
 .icerik{flex:1 1 auto;min-width:0;width:100%;margin:0;padding:24px 30px}
 .sekme-bolum{width:100%}
 @media(max-width:640px){
+  .menu-btn{display:inline-block}
   .govde{flex-direction:column}
-  .sekme-bar{flex-direction:row;flex-wrap:wrap;width:auto;border-right:none;
-    border-bottom:none;position:static;min-height:0;padding:8px}
-  .sekme-btn{width:auto;border-left:none;border-bottom:3px solid transparent;border-radius:6px}
-  .sekme-btn.aktif{border-left:none;border-bottom-color:#5eead4;background:rgba(255,255,255,.16)}
+  /* Sol menu -> acilir cekmece (drawer) */
+  .sekme-bar{position:fixed;top:0;left:0;bottom:0;height:100dvh;width:240px;z-index:200;
+    flex-direction:column;flex-wrap:nowrap;padding:16px 10px;overflow-y:auto;
+    transform:translateX(-100%);transition:transform .22s ease;box-shadow:2px 0 18px rgba(0,0,0,.28);min-height:0}
+  .sekme-bar.acik{transform:translateX(0)}
+  .sekme-btn{width:100%;border-left:3px solid transparent;border-bottom:none;border-radius:0 8px 8px 0;padding:13px 14px;font-size:16px}
+  .sekme-btn.aktif{border-left-color:#5eead4;border-bottom:none;background:rgba(255,255,255,.16)}
   .icerik{padding:16px}
 }
 h2{font-size:19px;font-weight:700;color:var(--renk-metin);margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--renk-cizgi)}
@@ -94,7 +102,8 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 .nokta{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}
 .nokta.yesil{background:var(--yesil)}.nokta.kirmizi{background:var(--kirmizi)}
 /* Rota tablosu */
-.rota-tablo{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+.rota-kaydir{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 4px}
+.rota-tablo{width:100%;min-width:620px;border-collapse:collapse;font-size:13px;table-layout:fixed}
 .rota-tablo th,.rota-tablo td{border:1px solid var(--renk-cizgi);padding:6px 4px;text-align:center;vertical-align:middle}
 .rota-tablo td{height:58px}
 .rota-tablo th:first-child,.rota-tablo td.kisi{width:112px}
@@ -189,7 +198,10 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 <!-- PANEL -->
 <div id="panel" class="gizli">
   <header class="ust-bar">
-    <span class="marka">Is Takip</span>
+    <span class="ust-sol">
+      <button id="menuBtn" class="menu-btn" type="button" aria-label="Menu">&#9776;</button>
+      <span class="marka">Is Takip</span>
+    </span>
     <span class="ust-sag">
       <span id="kullaniciAdi" class="kullanici"></span>
       <button id="cikisBtn" class="ikincil" type="button">Cikis</button>
@@ -197,8 +209,9 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
   </header>
   <p id="genelHata" class="hata-mesaji" style="text-align:center;margin:8px 16px 0"></p>
 
+  <div id="menuOverlay" class="menu-overlay"></div>
   <div class="govde">
-  <nav class="sekme-bar">
+  <nav id="sekmeBar" class="sekme-bar">
     <button class="sekme-btn aktif" data-hedef="sekme-pano" type="button">Dashboard</button>
     <button class="sekme-btn" data-hedef="sekme-denetim" type="button">Gunluk Denetim</button>
     <button class="sekme-btn" data-hedef="sekme-gorevler" type="button">Gorevler</button>
@@ -514,12 +527,18 @@ $('girisForm').addEventListener('submit', async (e)=>{
 $('cikisBtn').addEventListener('click', ()=>auth.signOut());
 
 // ================== SEKMELER ==================
+// Mobil acilir menu (drawer) ac/kapa
+function menuAc(){ $('sekmeBar').classList.add('acik'); $('menuOverlay').classList.add('acik'); }
+function menuKapat(){ const s=$('sekmeBar'); if(s)s.classList.remove('acik'); const o=$('menuOverlay'); if(o)o.classList.remove('acik'); }
 function sekmeleriKur(){
   const btns=document.querySelectorAll('.sekme-btn');
   const bols=document.querySelectorAll('.sekme-bolum');
+  const mBtn=$('menuBtn'); if(mBtn) mBtn.addEventListener('click',menuAc);
+  const ov=$('menuOverlay'); if(ov) ov.addEventListener('click',menuKapat);
   btns.forEach(b=>b.addEventListener('click',()=>{
     btns.forEach(x=>x.classList.toggle('aktif',x===b));
     bols.forEach(s=>s.classList.toggle('gizli',s.id!==b.dataset.hedef));
+    menuKapat();   // sekme secince mobil menuyu kapat
     if(b.dataset.hedef==='sekme-log') logCiz();
     if(b.dataset.hedef==='sekme-pano') panoCiz();
     if(b.dataset.hedef==='sekme-audit') auditCiz();
@@ -575,7 +594,7 @@ async function panoCiz(){
     const plan=snap.exists&&snap.data().plan?snap.data().plan:{};
     const harita=rotaGorevHaritasi(gorevler,hb);
     const kameraHaritasi=rotaKameraHaritasi(kameralar,hb);
-    rEl.innerHTML='<p class="mini-not">'+haftaEtiket(hb)+'</p>'+rotaTabloHTML(plan,false,hb,harita,kameraHaritasi);
+    rEl.innerHTML='<p class="mini-not">'+haftaEtiket(hb)+'</p><div class="rota-kaydir">'+rotaTabloHTML(plan,false,hb,harita,kameraHaritasi)+'</div>';
   }catch(err){console.error(err);rEl.innerHTML='<p class="bos-satir">Rota yuklenemedi.</p>';}
 }
 
