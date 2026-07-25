@@ -124,6 +124,26 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)
 .foto-yuk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
 .foto-not{flex:1 1 220px;margin:0;padding:8px 10px}
 .foto-btn{cursor:pointer;display:inline-block}
+/* Hatali bahis listesi (ticket + aciklama + acilir fotolar) */
+.bahis-liste{list-style:none;padding:0;margin:6px 0;display:grid;gap:6px}
+.bahis-oge{border:1px solid var(--renk-cizgi);border-radius:8px;overflow:hidden;background:#fff}
+.bahis-bas{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;background:#f6f9f7}
+.bahis-bas:hover{background:#eef4f0}
+.bahis-ok{font-size:11px;color:var(--renk-soluk);width:12px;flex:0 0 auto}
+.bahis-tik{font-weight:700;color:var(--renk-ana-koyu);flex:0 0 auto}
+.bahis-ack{flex:1 1 auto;min-width:0;color:var(--renk-metin);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bahis-say{font-size:12px;color:var(--renk-soluk);white-space:nowrap;flex:0 0 auto}
+.bahis-govde{display:none;padding:8px 10px;gap:8px;flex-wrap:wrap}
+.bahis-oge.acik .bahis-govde{display:flex}
+.rapor-bahis{margin:6px 0;padding:6px 8px;border:1px solid var(--renk-cizgi);border-radius:6px;font-size:13px}
+/* Tam ekran foto goruntuleyici (lightbox) */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:9999}
+.lightbox.acik{display:flex}
+.lightbox img{max-width:92vw;max-height:86vh;object-fit:contain;border-radius:4px}
+.lb-kapat{position:absolute;top:14px;right:20px;font-size:34px;color:#fff;cursor:pointer;background:none;border:none;line-height:1;padding:0}
+.lb-ok{position:absolute;top:50%;transform:translateY(-50%);font-size:30px;color:#fff;cursor:pointer;background:rgba(0,0,0,.35);border:none;padding:10px 16px;border-radius:8px;user-select:none}
+.lb-onceki{left:14px}.lb-sonraki{right:14px}
+.lb-sayac{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);color:#fff;font-size:14px;background:rgba(0,0,0,.45);padding:4px 12px;border-radius:12px}
 .rapor-liste{list-style:none;padding:0;margin:6px 0;display:grid;gap:10px}
 .rapor-liste li{border-bottom:1px solid var(--renk-cizgi);padding-bottom:8px;font-size:14px}
 .rapor-liste li:last-child{border-bottom:none;padding-bottom:0}
@@ -848,6 +868,88 @@ async function gorevFotoEkle(taskId,files,aciklama){
   }catch(err){console.error(err);h.style.color='';h.textContent='Foto yuklenemedi. Tekrar deneyin.';}
 }
 
+// Bir gorevin fotograflarini BAHIS bazinda gruplar.
+// Ayni bahisId'ye sahip fotolar tek bahistir; eski (bahisId'siz) kayitlar tek foto = tek bahis.
+function bahisleriGrupla(fotolar){
+  const grup=new Map();
+  const sirali=fotolar.slice().reverse();   // bahis icinde eski->yeni sirali olsun
+  sirali.forEach(f=>{
+    const key=f.bahisId||('tek-'+f.id);
+    if(!grup.has(key)) grup.set(key,{bahisId:key,ticketNo:f.ticketNo||'',aciklama:(f.aciklama!=null&&f.aciklama!=='')?f.aciklama:(f.note||''),fotolar:[]});
+    grup.get(key).fotolar.push(f);
+  });
+  return Array.from(grup.values());
+}
+
+// Bir goreve YENI hatali bahis ekler: ticket no + aciklama + bir veya birden fazla foto.
+async function gorevBahisEkle(taskId,ticketNo,aciklama,files){
+  const h=$('gHata');h.style.color='';
+  const liste=Array.isArray(files)?files:[files];
+  const bahisId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('b'+Date.now()+Math.random().toString(16).slice(2));
+  let ok=0;
+  h.textContent='Foto yukleniyor... (0/'+liste.length+')';
+  try{
+    for(let i=0;i<liste.length;i++){
+      const file=liste[i];
+      if(!file.type||file.type.indexOf('image/')!==0) continue;
+      const dataUrl=await resimKucult(file);
+      if(dataUrl.length>1000000) continue;          // cok buyuk resmi atla
+      await db.collection('photos').add({
+        taskId:taskId,bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',
+        uploadedBy:durum.uid,uploadedByName:adim(),
+        dataUrl:dataUrl,note:aciklama||'',createdAt:SUNUCU_ZAMAN()});
+      ok++;h.textContent='Foto yukleniyor... ('+ok+'/'+liste.length+')';
+    }
+    if(ok===0){h.textContent='Gecerli resim bulunamadi.';return;}
+    await logYaz('olusturma','Bahis',taskId,(ticketNo?('#'+ticketNo+' '):'')+ok+' foto'+(aciklama?' - '+aciklama:''));
+    h.textContent='';await gorevCiz();
+  }catch(err){console.error(err);h.style.color='';h.textContent='Foto yuklenemedi. Tekrar deneyin.';}
+}
+
+// ---- Tam ekran foto goruntuleyici (lightbox) ----
+let _lbResimler=[], _lbIndex=0;
+function lightboxHazirla(){
+  if(document.getElementById('lightbox')) return;
+  const o=document.createElement('div');o.id='lightbox';o.className='lightbox';
+  o.innerHTML='<button class="lb-kapat" aria-label="Kapat">&times;</button>'+
+    '<button class="lb-ok lb-onceki" aria-label="Onceki">&#10094;</button>'+
+    '<img id="lbResim" src="" alt="foto">'+
+    '<button class="lb-ok lb-sonraki" aria-label="Sonraki">&#10095;</button>'+
+    '<div id="lbSayac" class="lb-sayac"></div>';
+  document.body.appendChild(o);
+  o.querySelector('.lb-kapat').onclick=lightboxKapat;
+  o.querySelector('.lb-onceki').onclick=function(e){e.stopPropagation();lightboxGit(-1);};
+  o.querySelector('.lb-sonraki').onclick=function(e){e.stopPropagation();lightboxGit(1);};
+  o.onclick=function(e){if(e.target===o)lightboxKapat();};
+  document.addEventListener('keydown',function(e){
+    const el=document.getElementById('lightbox');
+    if(!el||!el.classList.contains('acik'))return;
+    if(e.key==='Escape')lightboxKapat();
+    else if(e.key==='ArrowRight')lightboxGit(1);
+    else if(e.key==='ArrowLeft')lightboxGit(-1);
+  });
+}
+function lightboxAc(resimler,index){
+  lightboxHazirla();
+  _lbResimler=resimler||[];_lbIndex=index||0;
+  if(!_lbResimler.length)return;
+  lightboxGuncelle();
+  document.getElementById('lightbox').classList.add('acik');
+}
+function lightboxGuncelle(){
+  document.getElementById('lbResim').src=_lbResimler[_lbIndex];
+  document.getElementById('lbSayac').textContent=(_lbIndex+1)+' / '+_lbResimler.length;
+  const tekMi=_lbResimler.length<=1;
+  document.querySelector('.lb-onceki').style.display=tekMi?'none':'';
+  document.querySelector('.lb-sonraki').style.display=tekMi?'none':'';
+}
+function lightboxGit(yon){
+  if(!_lbResimler.length)return;
+  _lbIndex=(_lbIndex+yon+_lbResimler.length)%_lbResimler.length;
+  lightboxGuncelle();
+}
+function lightboxKapat(){const o=document.getElementById('lightbox');if(o)o.classList.remove('acik');}
+
 async function gorevCiz(){
   const u=$('gListe');
   try{
@@ -860,24 +962,34 @@ async function gorevCiz(){
       const bas=document.createElement('div');bas.className='kayit-baslik';bas.textContent=g.title;
       const det=document.createElement('div');det.className='kayit-detay';
       det.textContent='Atanan: '+(g.assignedTo?kisiAdi(g.assignedTo):'atanmamis')+(gorevTarihi(g)?' - Gorev tarihi: '+gorevTarihi(g):'');
+      const bahisler=bahisleriGrupla(fotolar);
       const say=document.createElement('div');say.className='kayit-alt';
-      say.innerHTML='<b>Hatali odeme (foto): '+fotolar.length+'</b>'+(g.status==='done'?' - Gorev bitti':'');
+      say.innerHTML='<b>Hatali odeme (bahis): '+bahisler.length+'</b>'+(g.status==='done'?' - Gorev bitti':'');
       li.appendChild(bas);li.appendChild(det);li.appendChild(say);
-      if(fotolar.length){const galeri=document.createElement('div');galeri.className='foto-galeri';
-        fotolar.forEach(f=>{const wrap=document.createElement('div');wrap.className='foto-oge';
-          const a=document.createElement('a');a.href=f.dataUrl;a.target='_blank';
-          const im=document.createElement('img');im.src=f.dataUrl;im.className='foto-kucuk';im.alt='hatali odeme';
-          a.appendChild(im);wrap.appendChild(a);
-          if(f.note){const n=document.createElement('div');n.className='foto-not-goster';n.textContent=f.note;wrap.appendChild(n);}
-          galeri.appendChild(wrap);});li.appendChild(galeri);}
+      if(bahisler.length){const bl=document.createElement('ul');bl.className='bahis-liste';
+        bahisler.forEach(b=>{const resimler=b.fotolar.map(f=>f.dataUrl);
+          const bo=document.createElement('li');bo.className='bahis-oge';
+          const bbas=document.createElement('div');bbas.className='bahis-bas';
+          bbas.innerHTML='<span class="bahis-ok">&#9654;</span>'+
+            '<span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span>'+
+            '<span class="bahis-ack">'+esc(b.aciklama||'')+'</span>'+
+            '<span class="bahis-say">'+resimler.length+' resim</span>';
+          const bgov=document.createElement('div');bgov.className='bahis-govde';
+          b.fotolar.forEach((f,idx)=>{const im=document.createElement('img');im.src=f.dataUrl;im.className='foto-kucuk';im.alt='hatali odeme';
+            im.onclick=(e)=>{e.stopPropagation();lightboxAc(resimler,idx);};bgov.appendChild(im);});
+          bbas.onclick=()=>{bo.classList.toggle('acik');
+            bbas.querySelector('.bahis-ok').innerHTML=bo.classList.contains('acik')?'&#9660;':'&#9654;';};
+          bo.appendChild(bbas);bo.appendChild(bgov);bl.appendChild(bo);});
+        li.appendChild(bl);}
       const yuk=document.createElement('div');yuk.className='foto-yuk';
+      const tik=document.createElement('input');tik.type='text';tik.className='foto-not';tik.placeholder='Ticket no (or. 30746)';tik.maxLength=40;tik.style.flex='0 1 150px';
       const not=document.createElement('input');not.type='text';not.className='foto-not';
-      not.placeholder='Bu bahiste ne oldu? (aciklama - istege bagli)';
+      not.placeholder='Aciklama (or. 3500 odeyecegine 3000 odedi)';
       const lbl=document.createElement('label');lbl.className='ikincil kucuk foto-btn';lbl.textContent='+ Foto cek / ekle';
       const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.style.display='none';
       inp.setAttribute('capture','environment');   // telefonda arka kamerayi acar
-      inp.onchange=()=>{if(inp.files&&inp.files.length){gorevFotoEkle(id,Array.from(inp.files),not.value.trim());not.value='';}};
-      lbl.appendChild(inp);yuk.appendChild(not);yuk.appendChild(lbl);li.appendChild(yuk);
+      inp.onchange=()=>{if(inp.files&&inp.files.length){gorevBahisEkle(id,tik.value.trim(),not.value.trim(),Array.from(inp.files));tik.value='';not.value='';}};
+      lbl.appendChild(inp);yuk.appendChild(tik);yuk.appendChild(not);yuk.appendChild(lbl);li.appendChild(yuk);
       const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
       const sel=document.createElement('select');['todo','doing','done'].forEach(st=>{const o=document.createElement('option');
         o.value=st;o.textContent=DURUM_ETIKET[st];if(g.status===st)o.selected=true;sel.appendChild(o);});
@@ -907,13 +1019,15 @@ async function raporCiz(){
     const denetimler=denetimSnap.docs.map(d=>({id:d.id,...d.data()}));
     const ayMi=t=>!!t&&String(t).slice(0,7)===ay;
     const esitAd=(a,b)=>String(a||'').toLowerCase()===String(b||'').toLowerCase();
+    window._rG=[];   // rapor foto gruplari (lightbox icin)
     let html='';
     ROTA_KISILER.forEach(kisi=>{
       const satirlar=[];
       gorevler.forEach(g=>{const t=gorevTarihi(g);if(!ayMi(t))return;
         if(!esitAd(g.assignedTo?kisiAdi(g.assignedTo):'',kisi))return;
         const fl=fotoHarita[g.id]||[];
-        satirlar.push({tarih:t,tur:'Gorev',metin:esc(g.title)+' ['+(DURUM_ETIKET[g.status]||g.status)+'] - Hatali odeme foto: '+fl.length,fotolar:fl});
+        const bl=bahisleriGrupla(fl);
+        satirlar.push({tarih:t,tur:'Gorev',metin:esc(g.title)+' ['+(DURUM_ETIKET[g.status]||g.status)+'] - Hatali odeme (bahis): '+bl.length,bahisler:bl});
       });
       kasalar.forEach(o=>{const t=kameraTarihi(o);if(!ayMi(t))return;
         if(!esitAd(o.assignedTo?kisiAdi(o.assignedTo):'',kisi))return;
@@ -932,9 +1046,13 @@ async function raporCiz(){
         satirlar.forEach(r=>{
           html+='<li><span class="rapor-tarih">'+(r.tarih?uzunTarih(r.tarih):'-')+'</span> '+
             '<span class="rapor-etiket rapor-'+r.tur.toLowerCase()+'">'+r.tur+'</span> '+r.metin;
-          if(r.fotolar&&r.fotolar.length){html+='<div class="foto-galeri">';
-            r.fotolar.forEach(f=>{html+='<span class="foto-oge"><a href="'+f.dataUrl+'" target="_blank"><img class="foto-kucuk" src="'+f.dataUrl+'" alt="foto"></a>'+(f.note?'<span class="foto-not-goster">'+esc(f.note)+'</span>':'')+'</span>';});
-            html+='</div>';}
+          if(r.bahisler&&r.bahisler.length){
+            r.bahisler.forEach(b=>{const resimler=b.fotolar.map(f=>f.dataUrl);
+              const gi=window._rG.push(resimler)-1;
+              html+='<div class="rapor-bahis"><span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span> '+esc(b.aciklama||'')+'<div class="foto-galeri">';
+              b.fotolar.forEach((f,idx)=>{html+='<img class="foto-kucuk" src="'+f.dataUrl+'" alt="foto" onclick="lightboxAc(window._rG['+gi+'],'+idx+')">';});
+              html+='</div></div>';});
+          }
           html+='</li>';
         });
         html+='</ul>';
