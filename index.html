@@ -186,6 +186,13 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 .kisi-onay:hover{background:var(--renk-tint)}
 .kisi-onay:has(input:checked){background:var(--renk-tint);border-color:var(--renk-ana);color:var(--renk-ana-koyu)}
 .kisi-onay input{width:auto;margin:0}
+/* Genel Mudur (salt-okunur) modu: veri girme/duzenleme arayuzleri gizli */
+body.salt-okunur #gForm, body.salt-okunur #denetimForm, body.salt-okunur #kForm, body.salt-okunur #aForm,
+body.salt-okunur .foto-yuk, body.salt-okunur .bahis-arac, body.salt-okunur .satir-arac,
+body.salt-okunur #rKaydet, body.salt-okunur #rOnceki, body.salt-okunur #rSonraki,
+body.salt-okunur #sKur, body.salt-okunur #sAdmin{display:none!important}
+body.salt-okunur .rota-tablo select{pointer-events:none}
+body.salt-okunur #kullaniciAdi{font-weight:700}
 .rapor-liste{list-style:none;padding:0;margin:6px 0;display:grid;gap:10px}
 .rapor-liste li{border-bottom:1px solid var(--renk-cizgi);padding-bottom:8px;font-size:14px}
 .rapor-liste li:last-child{border-bottom:none;padding-bottom:0}
@@ -473,6 +480,9 @@ function authHata(e){return (e&&AUTH_HATA[e.code])||'Bir sorun olustu. Lutfen te
 const durum={uid:null,profil:null,subeler:[],kullanicilar:[]};
 function adim(){return durum.profil&&durum.profil.name?durum.profil.name:'Kullanici';}
 function yoneticiMi(){return !!(durum.profil&&durum.profil.role==='admin');}
+// Genel Mudur (salt-okunur) e-postalari. Bu hesaplar sadece izler; veri girme/duzenleme/silme kapali.
+const YONETICI_EMAILLER=['levent@solibet.com'];
+function saltOkunurMu(){const u=auth.currentUser;return !!(u&&u.email&&YONETICI_EMAILLER.indexOf(u.email.toLowerCase())>=0);}
 function subeAdi(id){const s=durum.subeler.find(x=>x.id===id);return s?s.name:'(bilinmeyen sube)';}
 function kisiAdi(id){ if(typeof id==='string'&&id.indexOf('ad:')===0) return id.slice(3);
   const k=durum.kullanicilar.find(x=>x.id===id);return k?k.name:'atanmamis';}
@@ -1565,7 +1575,9 @@ auth.onAuthStateChanged(async(u)=>{
   try{
     durum.uid=u.uid;
     durum.profil=await profiliHazirla(u);
-    $('kullaniciAdi').textContent=adim();
+    const gm=saltOkunurMu();
+    document.body.classList.toggle('salt-okunur',gm);
+    $('kullaniciAdi').textContent=adim()+(gm?' (Genel Mudur - salt okunur)':'');
     await subeleriYukle();
     await kullanicilariYukle();
     if(!baslatildi){ sekmeleriKur(); baslatildi=true; }
