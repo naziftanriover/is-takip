@@ -42,21 +42,22 @@ button:disabled{opacity:.6;cursor:default}
 .ikincil.kucuk,.kucuk{padding:6px 10px;font-size:13px}
 /* Sol kenar menu + TAM GENISLIK icerik */
 .govde{display:flex;align-items:stretch;width:100%}
-.sekme-bar{display:flex;flex-direction:column;gap:2px;background:var(--renk-kart);
-  border-right:1px solid var(--renk-cizgi);padding:14px 10px;width:196px;flex-shrink:0;
+.sekme-bar{display:flex;flex-direction:column;gap:2px;background:linear-gradient(180deg,#0f766e,#115e59);
+  border-right:none;padding:14px 10px;width:196px;flex-shrink:0;
   position:sticky;top:0;align-self:flex-start;min-height:calc(100vh - 52px)}
-.sekme-btn{background:transparent;color:var(--renk-soluk);border:none;border-left:3px solid transparent;
+.sekme-btn{background:transparent;color:rgba(255,255,255,.82);border:none;border-left:3px solid transparent;
   border-radius:0 8px 8px 0;padding:11px 14px;font-weight:600;text-align:left;width:100%;transition:background .12s,color .12s}
-.sekme-btn:hover{background:var(--renk-yuzey);color:var(--renk-metin)}
-.sekme-btn.aktif{color:var(--renk-ana-koyu);border-left-color:var(--renk-ana);background:var(--renk-tint)}
+.sekme-btn:hover{background:rgba(255,255,255,.10);color:#fff}
+.sekme-btn:focus{outline:none}
+.sekme-btn.aktif{color:#fff;border-left-color:#5eead4;background:rgba(255,255,255,.16)}
 .icerik{flex:1 1 auto;min-width:0;width:100%;margin:0;padding:24px 30px}
 .sekme-bolum{width:100%}
 @media(max-width:640px){
   .govde{flex-direction:column}
   .sekme-bar{flex-direction:row;flex-wrap:wrap;width:auto;border-right:none;
-    border-bottom:1px solid var(--renk-cizgi);position:static;min-height:0;padding:6px 8px}
-  .sekme-btn{width:auto;border-left:none;border-bottom:3px solid transparent;border-radius:0}
-  .sekme-btn.aktif{border-left:none;border-bottom-color:var(--renk-ana);background:transparent}
+    border-bottom:none;position:static;min-height:0;padding:8px}
+  .sekme-btn{width:auto;border-left:none;border-bottom:3px solid transparent;border-radius:6px}
+  .sekme-btn.aktif{border-left:none;border-bottom-color:#5eead4;background:rgba(255,255,255,.16)}
   .icerik{padding:16px}
 }
 h2{font-size:19px;font-weight:700;color:var(--renk-metin);margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--renk-cizgi)}
