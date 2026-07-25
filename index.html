@@ -179,6 +179,13 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 .audit-kisi{color:var(--renk-soluk);font-size:13px}
 .rapor-bahis-ic{margin:4px 0 4px 10px;padding:4px 8px;border-left:3px solid var(--renk-cizgi)}
 .bahis-arac{display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;margin-top:6px}
+/* Cok-kisi secim (atamalar) */
+.kisi-secim{display:flex;flex-wrap:wrap;gap:8px 10px;padding:6px 0 0;margin-bottom:12px}
+.kisi-onay{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:14px;background:var(--renk-yuzey);
+  border:1px solid var(--renk-cizgi);border-radius:20px;padding:7px 14px;cursor:pointer;margin:0;user-select:none;transition:background .12s,border-color .12s}
+.kisi-onay:hover{background:var(--renk-tint)}
+.kisi-onay:has(input:checked){background:var(--renk-tint);border-color:var(--renk-ana);color:var(--renk-ana-koyu)}
+.kisi-onay input{width:auto;margin:0}
 .rapor-liste{list-style:none;padding:0;margin:6px 0;display:grid;gap:10px}
 .rapor-liste li{border-bottom:1px solid var(--renk-cizgi);padding-bottom:8px;font-size:14px}
 .rapor-liste li:last-child{border-bottom:none;padding-bottom:0}
@@ -272,7 +279,7 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
       <form id="gForm" class="kart-form">
         <label>Gorev</label><input id="gBaslik" type="text" maxlength="120" />
         <div class="form-satir">
-          <div class="alan"><label>Atanan kisi</label><select id="gAtanan"></select></div>
+          <div class="alan"><label>Atanan kisi(ler)</label><div id="gAtananlar" class="kisi-secim"></div></div>
           <div class="alan"><label>Gorev tarihi (istege bagli)</label><input id="gTarih" type="date" /></div>
         </div>
         <p id="gHata" class="hata-mesaji"></p>
@@ -291,7 +298,7 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
       <form id="aForm" class="kart-form">
         <div class="form-satir">
           <div class="alan"><label>Sube</label><select id="aSube"></select></div>
-          <div class="alan"><label>Denetleyen</label><select id="aAtanan"></select></div>
+          <div class="alan"><label>Denetleyen(ler)</label><div id="aAtananlar" class="kisi-secim"></div></div>
         </div>
         <div class="form-satir">
           <div class="alan"><label>Baslangic tarihi (kapsanan ilk gun)</label><input id="aBas" type="date" /></div>
@@ -320,7 +327,7 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
           <div class="alan"><label>Yon</label><select id="kYon"><option value="eksik">Eksik</option><option value="fazla">Fazla</option></select></div>
         </div>
         <div class="form-satir">
-          <div class="alan"><label>Kamerayi inceleyecek kisi</label><select id="kAtanan"></select></div>
+          <div class="alan"><label>Kamerayi inceleyecek kisi(ler)</label><div id="kAtananlar" class="kisi-secim"></div></div>
           <div class="alan"><label>Inceleme tarihi (istege bagli)</label><input id="kIncelemeTarih" type="date" /></div>
         </div>
         <label class="onay-satiri"><input id="kKamera" type="checkbox" /> Kamera incelendi</label>
@@ -468,6 +475,18 @@ function adim(){return durum.profil&&durum.profil.name?durum.profil.name:'Kullan
 function yoneticiMi(){return !!(durum.profil&&durum.profil.role==='admin');}
 function subeAdi(id){const s=durum.subeler.find(x=>x.id===id);return s?s.name:'(bilinmeyen sube)';}
 function kisiAdi(id){const k=durum.kullanicilar.find(x=>x.id===id);return k?k.name:'atanmamis';}
+// Bir kaydin atanan kisi uid listesi (yeni: assignees[], eski tek: assignedTo)
+function atananIdler(o){ if(o&&Array.isArray(o.assignees)&&o.assignees.length) return o.assignees; if(o&&o.assignedTo) return [o.assignedTo]; return []; }
+function atananAdlari(o){ const ids=atananIdler(o); return ids.length?ids.map(kisiAdi).join(', '):'atanmamis'; }
+// Audit denetleyen adi (yeni assignees / eski assignedToName / createdByName)
+function denetleyenAdi(a){ const ids=atananIdler(a); if(ids.length) return ids.map(kisiAdi).join(', '); return a.assignedToName||a.createdByName||''; }
+// Cok-kisi secim (onay kutulari) yardimcilari
+function kisiSecimKur(elId,secili){ const el=$(elId); if(!el) return; el.innerHTML=''; const sec=Array.isArray(secili)?secili:[];
+  durum.kullanicilar.forEach(k=>{ const l=document.createElement('label'); l.className='kisi-onay';
+    const c=document.createElement('input'); c.type='checkbox'; c.value=k.id; if(sec.indexOf(k.id)>=0)c.checked=true;
+    l.appendChild(c); l.appendChild(document.createTextNode(' '+k.name)); el.appendChild(l); }); }
+function kisiSecimAl(elId){ const el=$(elId); if(!el) return []; return Array.prototype.slice.call(el.querySelectorAll('input[type=checkbox]:checked')).map(function(c){return c.value;}); }
+function kisiSecimTemizle(elId){ const el=$(elId); if(!el) return; el.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;}); }
 
 // ================== KUCUK YARDIMCILAR ==================
 function $(id){return document.getElementById(id);}
@@ -624,7 +643,7 @@ function panoGorevleriCiz(gorevler){
     const bitti=g.status==='done';
     const gt=gorevTarihi(g);
     html+=`<div class="gorev-satiri"><span><span class="nokta ${bitti?'yesil':'kirmizi'}"></span>`+
-      `<b>${esc(g.assignedTo?kisiAdi(g.assignedTo):'atanmamis')}</b> - ${esc(g.title)}`+
+      `<b>${esc(atananAdlari(g))}</b> - ${esc(g.title)}`+
       `${gt?' <span class="mini-not">('+esc(gt)+')</span>':''}</span>`+
       `<span class="rozet ${bitti?'yesil':'kirmizi'}">${bitti?'Yapildi':'Yapilmadi'}</span></div>`;
   });
@@ -641,12 +660,14 @@ function rotaGorevHaritasi(gorevler,weekStart){
     if(!gt) return;
     const gunIdx=gunler.indexOf(gt);
     if(gunIdx<0) return;                                  // bu haftaya ait degil
-    const ad=g.assignedTo?kisiAdi(g.assignedTo):'';
-    const kisi=ROTA_KISILER.find(k=>k.toLowerCase()===ad.toLowerCase());
-    if(!kisi) return;                                     // rota satirlarindan biri degil
-    if(!harita[kisi]) harita[kisi]={};
-    if(!harita[kisi][gunIdx]) harita[kisi][gunIdx]=[];
-    harita[kisi][gunIdx].push(g.title);
+    atananIdler(g).forEach(uid=>{                         // birden fazla atanan olabilir
+      const ad=kisiAdi(uid);
+      const kisi=ROTA_KISILER.find(k=>k.toLowerCase()===ad.toLowerCase());
+      if(!kisi) return;                                   // rota satirlarindan biri degil
+      if(!harita[kisi]) harita[kisi]={};
+      if(!harita[kisi][gunIdx]) harita[kisi][gunIdx]=[];
+      harita[kisi][gunIdx].push(g.title);
+    });
   });
   return harita;
 }
@@ -660,17 +681,20 @@ function rotaKameraHaritasi(kayitlar,weekStart){
   const harita={};
   const gunler=gunTarihleri(weekStart);
   kayitlar.forEach(o=>{
-    if(!o.assignedTo) return;
+    const ids=atananIdler(o);
+    if(!ids.length) return;
     const kt=kameraTarihi(o);
     if(!kt) return;
     const gunIdx=gunler.indexOf(kt);
     if(gunIdx<0) return;
-    const ad=kisiAdi(o.assignedTo);
-    const kisi=ROTA_KISILER.find(k=>k.toLowerCase()===ad.toLowerCase());
-    if(!kisi) return;
-    if(!harita[kisi]) harita[kisi]={};
-    if(!harita[kisi][gunIdx]) harita[kisi][gunIdx]=[];
-    harita[kisi][gunIdx].push('Kamera: '+subeAdi(o.branchId));
+    ids.forEach(uid=>{
+      const ad=kisiAdi(uid);
+      const kisi=ROTA_KISILER.find(k=>k.toLowerCase()===ad.toLowerCase());
+      if(!kisi) return;
+      if(!harita[kisi]) harita[kisi]={};
+      if(!harita[kisi][gunIdx]) harita[kisi][gunIdx]=[];
+      harita[kisi][gunIdx].push('Kamera: '+subeAdi(o.branchId));
+    });
   });
   return harita;
 }
@@ -868,19 +892,20 @@ async function denetimCiz(){
 
 // ================== GOREVLER ==================
 function gorevBaslat(){
-  secimDoldur($('gAtanan'),durum.kullanicilar,'Kime atanacak?');
+  kisiSecimKur('gAtananlar');
   $('gForm').onsubmit=async(e)=>{
     e.preventDefault();const h=$('gHata');h.textContent='';
     const baslik=$('gBaslik').value.trim();
     if(!baslik){h.textContent='Lutfen gorev basligi girin.';return;}
+    const atananlar=kisiSecimAl('gAtananlar');
     const btn=$('gKaydet');btn.disabled=true;
     try{
       const ref=await db.collection('tasks').add({
         createdBy:durum.uid,createdByName:adim(),title:baslik,
-        assignedTo:$('gAtanan').value||null,taskDate:$('gTarih').value||null,
+        assignees:atananlar,assignedTo:atananlar[0]||null,taskDate:$('gTarih').value||null,
         status:'todo',createdAt:SUNUCU_ZAMAN()});
       await logYaz('olusturma','Gorev',ref.id,baslik);
-      $('gBaslik').value='';$('gTarih').value='';$('gAtanan').value='';await gorevCiz();
+      $('gBaslik').value='';$('gTarih').value='';kisiSecimTemizle('gAtananlar');await gorevCiz();
     }catch(err){console.error(err);h.textContent='Gorev eklenemedi. Tekrar deneyin.';}
     finally{btn.disabled=false;}
   };
@@ -1244,7 +1269,7 @@ async function auditSil(id,etiket){
 }
 function auditBaslat(){
   secimDoldur($('aSube'),durum.subeler,'Sube secin...');
-  secimDoldur($('aAtanan'),durum.kullanicilar,'Denetleyen kisi...');
+  kisiSecimKur('aAtananlar');
   if(!$('aBas').value)$('aBas').value=bugun();
   if(!$('aBit').value)$('aBit').value=bugun();
   $('aForm').onsubmit=async(e)=>{
@@ -1255,13 +1280,14 @@ function auditBaslat(){
     if(bit<bas){h.textContent='Bitis tarihi baslangictan once olamaz.';return;}
     const btn=$('aKaydet');btn.disabled=true;
     try{
-      const atanan=$('aAtanan').value||null;
+      const atananlar=kisiSecimAl('aAtananlar');
       const ref=await db.collection('audits').add({
         createdBy:durum.uid,createdByName:adim(),branchId:sube,startDate:bas,endDate:bit,
         ticketStart:$('aTicketBas').value.trim(),ticketEnd:$('aTicketBit').value.trim(),
-        assignedTo:atanan,assignedToName:atanan?kisiAdi(atanan):adim(),createdAt:SUNUCU_ZAMAN()});
+        assignees:atananlar,assignedTo:atananlar[0]||null,assignedToName:atananlar.length?atananlar.map(kisiAdi).join(', '):adim(),
+        createdAt:SUNUCU_ZAMAN()});
       await logYaz('olusturma','Audit',ref.id,subeAdi(sube)+' '+bas+'..'+bit);
-      $('aTicketBas').value='';$('aTicketBit').value='';
+      $('aTicketBas').value='';$('aTicketBit').value='';kisiSecimTemizle('aAtananlar');
       await auditCiz();
     }catch(err){console.error(err);h.textContent='Audit eklenemedi. Tekrar deneyin.';}
     finally{btn.disabled=false;}
@@ -1285,7 +1311,7 @@ async function auditCiz(){
         const ust=document.createElement('div');ust.className='audit-ust';
         ust.innerHTML='<span class="audit-tarih">'+uzunTarih(a.startDate)+' - '+uzunTarih(a.endDate)+'</span>'+
           '<span class="audit-ticket">Ticket: '+(a.ticketStart?esc(a.ticketStart):'?')+' - '+(a.ticketEnd?esc(a.ticketEnd):'?')+'</span>'+
-          '<span class="audit-kisi">Denetleyen: '+esc(a.assignedToName||a.createdByName||'')+'</span>';
+          '<span class="audit-kisi">Denetleyen: '+esc(denetleyenAdi(a))+'</span>';
         kart.appendChild(ust);
         auditBahisBlogu(kart,a,fotoHarita[a.id]||[]);
         if(a.createdBy===durum.uid||yoneticiMi()){
@@ -1311,7 +1337,7 @@ async function gorevCiz(){
       const li=document.createElement('li');li.className='kayit-satiri';
       const bas=document.createElement('div');bas.className='kayit-baslik';bas.textContent=g.title;
       const det=document.createElement('div');det.className='kayit-detay';
-      det.textContent='Atanan: '+(g.assignedTo?kisiAdi(g.assignedTo):'atanmamis')+(gorevTarihi(g)?' - Gorev tarihi: '+gorevTarihi(g):'');
+      det.textContent='Atananlar: '+atananAdlari(g)+(gorevTarihi(g)?' - Gorev tarihi: '+gorevTarihi(g):'');
       const bahisler=bahisleriGrupla(fotolar);
       const say=document.createElement('div');say.className='kayit-alt';
       say.innerHTML='<b>Hatali odeme (bahis): '+bahisler.length+'</b>'+(g.status==='done'?' - Gorev bitti':'');
@@ -1391,7 +1417,7 @@ async function raporCiz(){
           const bahisler=auditBahisleri(a,fotoHarita[a.id]||[]);
           html+='<div class="rapor-bahis"><b>'+uzunTarih(a.startDate)+' - '+uzunTarih(a.endDate)+'</b>'+
             ' &middot; Ticket: '+(a.ticketStart?esc(a.ticketStart):'?')+' - '+(a.ticketEnd?esc(a.ticketEnd):'?')+
-            ' &middot; Denetleyen: '+esc(a.assignedToName||a.createdByName||'')+
+            ' &middot; Denetleyen: '+esc(denetleyenAdi(a))+
             ' &middot; Hatali bahis: '+bahisler.length;
           bahisler.forEach(b=>{const resimler=b.fotolar.map(f=>f.dataUrl);
             const gi=window._rG.push(resimler)-1;
@@ -1417,7 +1443,7 @@ async function raporCiz(){
 // ================== KASA ==================
 function kasaBaslat(){
   secimDoldur($('kSube'),durum.subeler,'Sube secin...');
-  secimDoldur($('kAtanan'),durum.kullanicilar,'Kime atanacak?');
+  kisiSecimKur('kAtananlar');
   $('kTarih').value=bugun();
   $('kForm').onsubmit=async(e)=>{
     e.preventDefault();const h=$('kHata');h.textContent='';
@@ -1427,14 +1453,15 @@ function kasaBaslat(){
     if($('kTutar').value===''||isNaN(tutar)||tutar<0){h.textContent='Lutfen gecerli bir tutar girin.';return;}
     const btn=$('kKaydet');btn.disabled=true;
     try{
+      const katananlar=kisiSecimAl('kAtananlar');
       const ref=await db.collection('cashEvents').add({
         createdBy:durum.uid,createdByName:adim(),branchId:sube,date:tarih,amount:tutar,
         direction:$('kYon').value,cameraChecked:$('kKamera').checked,
-        assignedTo:$('kAtanan').value||null,reviewDate:$('kIncelemeTarih').value||null,
+        assignees:katananlar,assignedTo:katananlar[0]||null,reviewDate:$('kIncelemeTarih').value||null,
         finding:$('kBulgu').value.trim(),resolved:false,createdAt:SUNUCU_ZAMAN()});
       await logYaz('olusturma','Kasa/Kamera',ref.id,subeAdi(sube)+' / '+tutar+' '+YON_ETIKET[$('kYon').value]);
       $('kTutar').value='';$('kBulgu').value='';$('kKamera').checked=false;
-      $('kAtanan').value='';$('kIncelemeTarih').value='';await kasaCiz();
+      kisiSecimTemizle('kAtananlar');$('kIncelemeTarih').value='';await kasaCiz();
     }catch(err){console.error(err);h.textContent='Kayit eklenemedi. Tekrar deneyin.';}
     finally{btn.disabled=false;}
   };
@@ -1463,7 +1490,7 @@ async function kasaCiz(){
       const det=document.createElement('div');det.className='kayit-detay';
       det.textContent=(o.cameraChecked?'Kamera incelendi. ':'Kamera incelenmedi. ')+(o.finding?'Bulgu: '+o.finding:'Bulgu notu yok.');
       const ata=document.createElement('div');ata.className='kayit-alt';
-      ata.textContent='Kamera atanan: '+(o.assignedTo?kisiAdi(o.assignedTo):'atanmamis')+(kameraTarihi(o)?' - Inceleme tarihi: '+kameraTarihi(o):'');
+      ata.textContent='Kamera atananlar: '+atananAdlari(o)+(kameraTarihi(o)?' - Inceleme tarihi: '+kameraTarihi(o):'');
       const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
       const c=document.createElement('button');c.className='ikincil kucuk';c.textContent=o.resolved?'Yeniden ac':'Cozuldu isaretle';
       c.onclick=()=>kasaCozum(id,!o.resolved);alt.appendChild(c);
