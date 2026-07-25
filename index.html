@@ -2,8 +2,16 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Is Takip</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Security</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#0f766e" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Security" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
 <style>
 :root{
   --renk-arka:#eef2f0;--renk-kart:#ffffff;--renk-ana:#0d9488;--renk-ana-koyu:#0f766e;
@@ -184,7 +192,7 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 <!-- GIRIS -->
 <main id="girisSayfa" class="giris-sayfa">
   <form id="girisForm" class="giris-kart" novalidate>
-    <h1>Is Takip</h1>
+    <h1>Security</h1>
     <p class="alt-baslik">Guvenlik / Denetim Ekibi</p>
     <label for="email">E-posta</label>
     <input id="email" type="email" autocomplete="username" />
@@ -200,7 +208,7 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
   <header class="ust-bar">
     <span class="ust-sol">
       <button id="menuBtn" class="menu-btn" type="button" aria-label="Menu">&#9776;</button>
-      <span class="marka">Is Takip</span>
+      <span class="marka">Security</span>
     </span>
     <span class="ust-sag">
       <span id="kullaniciAdi" class="kullanici"></span>
@@ -390,6 +398,12 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
+// ================== PWA: SERVICE WORKER KAYDI ==================
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('[sw] kayit olmadi',e);});
+  });
+}
 // ================== FIREBASE AYARLARI (is-takip projesi) ==================
 const firebaseConfig = {
   apiKey: "AIzaSyDN8adK7IH71m2ecXjTJGK6ynEA1GyTIKM",
