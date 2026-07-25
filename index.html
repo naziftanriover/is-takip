@@ -155,6 +155,7 @@ h2{font-size:18px}h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)
 .audit-ticket{color:var(--renk-metin)}
 .audit-kisi{color:var(--renk-soluk);font-size:13px}
 .rapor-bahis-ic{margin:4px 0 4px 10px;padding:4px 8px;border-left:3px solid var(--renk-cizgi)}
+.bahis-arac{display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;margin-top:6px}
 .rapor-liste{list-style:none;padding:0;margin:6px 0;display:grid;gap:10px}
 .rapor-liste li{border-bottom:1px solid var(--renk-cizgi);padding-bottom:8px;font-size:14px}
 .rapor-liste li:last-child{border-bottom:none;padding-bottom:0}
@@ -1096,6 +1097,106 @@ async function auditBahisEkle(auditId,ticketNo,aciklama,files){
     h.textContent='';await auditCiz();
   }catch(err){console.error(err);h.textContent='Foto yuklenemedi. Tekrar deneyin.';}
 }
+
+// Bir audit'in bahislerini birlestir: audit.bets (foto olmasa da duran bahisler) + fotolar (bahisId ile).
+function auditBahisleri(audit,fotolar){
+  const map=new Map();
+  (audit.bets||[]).forEach(b=>{ if(b&&b.bahisId) map.set(b.bahisId,{bahisId:b.bahisId,ticketNo:b.ticketNo||'',aciklama:b.aciklama||'',fotolar:[]}); });
+  const sirali=fotolar.slice().reverse();   // eski -> yeni
+  sirali.forEach(f=>{const key=f.bahisId||('tek-'+f.id);
+    if(!map.has(key)) map.set(key,{bahisId:key,ticketNo:f.ticketNo||'',aciklama:(f.aciklama!=null&&f.aciklama!=='')?f.aciklama:(f.note||''),fotolar:[]});
+    const g=map.get(key);
+    if(!g.ticketNo&&f.ticketNo) g.ticketNo=f.ticketNo;
+    if(!g.aciklama&&(f.aciklama||f.note)) g.aciklama=f.aciklama||f.note;
+    g.fotolar.push(f);});
+  return Array.from(map.values());
+}
+// Audit'e YENI hatali bahis ekler (foto olmadan). audit.bets dizisine yazar.
+async function auditBahisYeni(auditId,ticketNo,aciklama){
+  const h=$('aHata');h.style.color='';h.textContent='';
+  const bahisId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('b'+Date.now()+Math.random().toString(16).slice(2));
+  try{
+    const ref=db.collection('audits').doc(auditId);
+    const snap=await ref.get();const data=snap.data()||{};
+    const bets=Array.isArray(data.bets)?data.bets.slice():[];
+    bets.push({bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||''});
+    await ref.update({bets:bets});
+    await logYaz('olusturma','Bahis',auditId,(ticketNo?('#'+ticketNo+' '):'')+(aciklama||''));
+    await auditCiz();
+  }catch(err){console.error(err);h.textContent='Bahis eklenemedi. Tekrar deneyin.';}
+}
+// Var olan bir bahise (bahisId) foto ekler.
+async function auditFotoEkle(auditId,bahisId,ticketNo,aciklama,files){
+  const h=$('aHata');h.style.color='';
+  const liste=Array.isArray(files)?files:[files];
+  let ok=0;h.textContent='Foto yukleniyor... (0/'+liste.length+')';
+  try{
+    for(let i=0;i<liste.length;i++){const file=liste[i];
+      if(!file.type||file.type.indexOf('image/')!==0) continue;
+      const dataUrl=await resimKucult(file);
+      if(dataUrl.length>1000000) continue;
+      await db.collection('photos').add({auditId:auditId,bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',
+        uploadedBy:durum.uid,uploadedByName:adim(),dataUrl:dataUrl,note:aciklama||'',createdAt:SUNUCU_ZAMAN()});
+      ok++;h.textContent='Foto yukleniyor... ('+ok+'/'+liste.length+')';
+    }
+    if(ok===0){h.textContent='Gecerli resim bulunamadi.';return;}
+    await logYaz('olusturma','Foto',auditId,ok+' foto'+(ticketNo?(' #'+ticketNo):''));
+    h.textContent='';await auditCiz();
+  }catch(err){console.error(err);h.textContent='Foto yuklenemedi. Tekrar deneyin.';}
+}
+// Bir hatali bahisi (fotolari + audit.bets kaydi) siler.
+async function auditBahisSil(auditId,bahisId,ticketNo){
+  if(typeof confirm==='function'&&!confirm('Bu hatali bahis (ve varsa fotolari) silinsin mi?'))return;
+  const h=$('aHata');h.style.color='';
+  try{
+    const snap=await db.collection('photos').where('auditId','==',auditId).where('bahisId','==',bahisId).get();
+    for(const d of snap.docs){ try{await d.ref.delete();}catch(e){console.error(e);} }
+    const ref=db.collection('audits').doc(auditId);
+    const asnap=await ref.get();const data=asnap.data()||{};
+    const bets=(Array.isArray(data.bets)?data.bets:[]).filter(b=>b&&b.bahisId!==bahisId);
+    await ref.update({bets:bets});
+    await logYaz('silme','Bahis',auditId,'#'+(ticketNo||'')+' silindi');
+    await auditCiz();
+  }catch(err){console.error(err);h.textContent='Bahis silinemedi. Yetkiniz olmayabilir.';}
+}
+// Audit kartina bahis listesi + "yeni bahis" + bahis basina "foto ekle"/"sil" ekler.
+function auditBahisBlogu(kutu,audit,fotolar){
+  const bahisler=auditBahisleri(audit,fotolar);
+  const say=document.createElement('div');say.className='kayit-alt';
+  say.innerHTML='<b>Hatali bahis: '+bahisler.length+'</b>';
+  kutu.appendChild(say);
+  if(bahisler.length){const bl=document.createElement('ul');bl.className='bahis-liste';
+    bahisler.forEach(b=>{const resimler=b.fotolar.map(f=>f.dataUrl);
+      const bo=document.createElement('li');bo.className='bahis-oge';
+      const bbas=document.createElement('div');bbas.className='bahis-bas';
+      bbas.innerHTML='<span class="bahis-ok">&#9654;</span>'+
+        '<span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span>'+
+        '<span class="bahis-ack">'+esc(b.aciklama||'')+'</span>'+
+        '<span class="bahis-say">'+resimler.length+' resim</span>';
+      const bgov=document.createElement('div');bgov.className='bahis-govde';
+      b.fotolar.forEach((f,idx)=>{const im=document.createElement('img');im.src=f.dataUrl;im.className='foto-kucuk';im.alt='hatali odeme';
+        im.onclick=(e)=>{e.stopPropagation();lightboxAc(resimler,idx);};bgov.appendChild(im);});
+      const arac=document.createElement('div');arac.className='bahis-arac';
+      const lbl=document.createElement('label');lbl.className='ikincil kucuk foto-btn';lbl.textContent='+ Foto cek / ekle';
+      const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.style.display='none';inp.setAttribute('capture','environment');
+      inp.onchange=()=>{if(inp.files&&inp.files.length){auditFotoEkle(audit.id,b.bahisId,b.ticketNo,b.aciklama,Array.from(inp.files));}};
+      lbl.appendChild(inp);arac.appendChild(lbl);
+      if(audit.createdBy===durum.uid||yoneticiMi()){const sb=document.createElement('button');sb.type='button';sb.className='ikincil kucuk';sb.textContent='Bahis sil';
+        sb.onclick=(e)=>{e.stopPropagation();auditBahisSil(audit.id,b.bahisId,b.ticketNo);};arac.appendChild(sb);}
+      bgov.appendChild(arac);
+      bbas.onclick=()=>{bo.classList.toggle('acik');bbas.querySelector('.bahis-ok').innerHTML=bo.classList.contains('acik')?'&#9660;':'&#9654;';};
+      bo.appendChild(bbas);bo.appendChild(bgov);bl.appendChild(bo);});
+    kutu.appendChild(bl);}
+  // yeni hatali bahis ekleme (foto sart degil)
+  const yuk=document.createElement('div');yuk.className='foto-yuk';
+  const tik=document.createElement('input');tik.type='text';tik.className='foto-not';tik.placeholder='Ticket no (or. 30746)';tik.maxLength=40;tik.style.flex='0 1 150px';
+  const not=document.createElement('input');not.type='text';not.className='foto-not';not.placeholder='Aciklama (or. 3500 odeyecegine 3000 odedi)';
+  const btn=document.createElement('button');btn.type='button';btn.textContent='+ Hatali bahis ekle';
+  btn.onclick=()=>{const t=tik.value.trim(),a=not.value.trim();
+    if(!t&&!a){$('aHata').textContent='Ticket no veya aciklama girin.';return;}
+    tik.value='';not.value='';auditBahisYeni(audit.id,t,a);};
+  yuk.appendChild(tik);yuk.appendChild(not);yuk.appendChild(btn);kutu.appendChild(yuk);
+}
 async function auditSil(id,etiket){
   if(typeof confirm==='function'&&!confirm('Bu audit kaydi silinsin mi?'))return;
   try{await db.collection('audits').doc(id).delete();
@@ -1147,7 +1248,7 @@ async function auditCiz(){
           '<span class="audit-ticket">Ticket: '+(a.ticketStart?esc(a.ticketStart):'?')+' - '+(a.ticketEnd?esc(a.ticketEnd):'?')+'</span>'+
           '<span class="audit-kisi">Denetleyen: '+esc(a.assignedToName||a.createdByName||'')+'</span>';
         kart.appendChild(ust);
-        bahisBloguEkle(kart,a.id,fotoHarita[a.id]||[],auditBahisEkle);
+        auditBahisBlogu(kart,a,fotoHarita[a.id]||[]);
         if(a.createdBy===durum.uid||yoneticiMi()){
           const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
           const b=document.createElement('button');b.className='ikincil kucuk';b.textContent='Audit sil';
@@ -1248,7 +1349,7 @@ async function raporCiz(){
         html+='<p class="bos-satir">Bu ay bu subede audit yok.</p>';
       } else {
         list.forEach(a=>{
-          const bahisler=bahisleriGrupla(fotoHarita[a.id]||[]);
+          const bahisler=auditBahisleri(a,fotoHarita[a.id]||[]);
           html+='<div class="rapor-bahis"><b>'+uzunTarih(a.startDate)+' - '+uzunTarih(a.endDate)+'</b>'+
             ' &middot; Ticket: '+(a.ticketStart?esc(a.ticketStart):'?')+' - '+(a.ticketEnd?esc(a.ticketEnd):'?')+
             ' &middot; Denetleyen: '+esc(a.assignedToName||a.createdByName||'')+
