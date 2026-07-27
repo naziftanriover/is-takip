@@ -1010,14 +1010,14 @@ function denetimBaslat(){
     const sube=$('dSube').value;const tarih=$('dTarih').value;
     if(!sube){h.textContent='Lutfen sube secin.';return;}
     if(!tarih){h.textContent='Lutfen tarih secin.';return;}
-    const items={};let sayac=0;
-    m.querySelectorAll('.denetim-madde').forEach(row=>{const v=row._al();items[row.dataset.key]=v;if(v.durum)sayac++;});
+    const items={};const checks={};let sayac=0;
+    m.querySelectorAll('.denetim-madde').forEach(row=>{const v=row._al();items[row.dataset.key]=v;checks[row.dataset.key]=(v.durum==='dogru');if(v.durum)sayac++;});
     if(!sayac){h.textContent='Lutfen en az bir madde icin Dogru/Yanlis secin.';return;}
     const btn=$('dKaydet');btn.disabled=true;
     try{
       const ref=await db.collection('dailyAudits').add({
         createdBy:durum.uid,createdByName:adim(),branchId:sube,date:tarih,
-        items:items,note:$('dNot').value.trim(),createdAt:SUNUCU_ZAMAN()});
+        items:items,checks:checks,note:$('dNot').value.trim(),createdAt:SUNUCU_ZAMAN()});
       await logYaz('olusturma','Gunluk denetim',ref.id,subeAdi(sube)+' / '+tarih);
       $('dNot').value=''; m.querySelectorAll('.denetim-madde').forEach(row=>row._temizle()); await denetimCiz();
     }catch(err){console.error(err);h.textContent='Kayit eklenemedi. Tekrar deneyin.';}
