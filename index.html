@@ -487,6 +487,10 @@ function saltOkunurMu(){const u=auth.currentUser;return !!(u&&u.email&&YONETICI_
 function subeAdi(id){const s=durum.subeler.find(x=>x.id===id);return s?s.name:'(bilinmeyen sube)';}
 function kisiAdi(id){ if(typeof id==='string'&&id.indexOf('ad:')===0) return id.slice(3);
   const k=durum.kullanicilar.find(x=>x.id===id);return k?k.name:'atanmamis';}
+// Gosterim icin isimlerin bas harflerini buyutur (nazif -> Nazif, "nazif, nurcan" -> "Nazif, Nurcan").
+// Turkce yerel: i -> I yerine dogru sekilde buyutur. Kayitli veriye dokunmaz, sadece ekranda.
+function buyukAd(s){ return String(s==null?'':s).replace(/[^\s,]+/g, function(w){
+  try{return w.charAt(0).toLocaleUpperCase('tr')+w.slice(1);}catch(e){return w.charAt(0).toUpperCase()+w.slice(1);} }); }
 // Sabit ekip listesi (4 kisi) - giris yapmamis olsa bile atanabilsin.
 // Gercek profili varsa onun uid'si, yoksa 'ad:<Isim>' sentetik id kullanilir.
 function takimRoster(){
@@ -497,14 +501,14 @@ function takimRoster(){
 }
 // Bir kaydin atanan kisi uid listesi (yeni: assignees[], eski tek: assignedTo)
 function atananIdler(o){ if(o&&Array.isArray(o.assignees)&&o.assignees.length) return o.assignees; if(o&&o.assignedTo) return [o.assignedTo]; return []; }
-function atananAdlari(o){ const ids=atananIdler(o); return ids.length?ids.map(kisiAdi).join(', '):'atanmamis'; }
+function atananAdlari(o){ const ids=atananIdler(o); return ids.length?buyukAd(ids.map(kisiAdi).join(', ')):'atanmamis'; }
 // Audit denetleyen adi (yeni assignees / eski assignedToName / createdByName)
-function denetleyenAdi(a){ const ids=atananIdler(a); if(ids.length) return ids.map(kisiAdi).join(', '); return a.assignedToName||a.createdByName||''; }
+function denetleyenAdi(a){ const ids=atananIdler(a); if(ids.length) return buyukAd(ids.map(kisiAdi).join(', ')); return buyukAd(a.assignedToName||a.createdByName||''); }
 // Cok-kisi secim (onay kutulari) yardimcilari
 function kisiSecimKur(elId,secili){ const el=$(elId); if(!el) return; el.innerHTML=''; const sec=Array.isArray(secili)?secili:[];
   takimRoster().forEach(k=>{ const l=document.createElement('label'); l.className='kisi-onay';
     const c=document.createElement('input'); c.type='checkbox'; c.value=k.id; if(sec.indexOf(k.id)>=0)c.checked=true;
-    l.appendChild(c); l.appendChild(document.createTextNode(' '+k.name)); el.appendChild(l); }); }
+    l.appendChild(c); l.appendChild(document.createTextNode(' '+buyukAd(k.name))); el.appendChild(l); }); }
 function kisiSecimAl(elId){ const el=$(elId); if(!el) return []; return Array.prototype.slice.call(el.querySelectorAll('input[type=checkbox]:checked')).map(function(c){return c.value;}); }
 function kisiSecimTemizle(elId){ const el=$(elId); if(!el) return; el.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;}); }
 // Inline DUZENLEME durumu (hangi kayit su an duzenleniyor)
@@ -513,7 +517,7 @@ let duzenlenenGorev=null, duzenlenenAudit=null, duzenlenenBahis=null;
 function kisiSecimEl(secili){ const el=document.createElement('div'); el.className='kisi-secim'; const sec=Array.isArray(secili)?secili:[];
   takimRoster().forEach(function(k){ const l=document.createElement('label'); l.className='kisi-onay';
     const c=document.createElement('input'); c.type='checkbox'; c.value=k.id; if(sec.indexOf(k.id)>=0)c.checked=true;
-    l.appendChild(c); l.appendChild(document.createTextNode(' '+k.name)); el.appendChild(l); }); return el; }
+    l.appendChild(c); l.appendChild(document.createTextNode(' '+buyukAd(k.name))); el.appendChild(l); }); return el; }
 function kisiSecimElAl(el){ return Array.prototype.slice.call(el.querySelectorAll('input[type=checkbox]:checked')).map(function(c){return c.value;}); }
 // Kucuk form-alani yardimcisi: etiket + input dondur
 function duzAlan(etiket,tip,deger){ const w=document.createElement('div');
@@ -919,7 +923,7 @@ async function denetimCiz(){
     s.forEach(doc=>{const k=doc.data();const li=document.createElement('li');li.className='kayit-satiri';
       li.innerHTML=`<div class="kayit-baslik">${esc(k.date)} - ${esc(subeAdi(k.branchId))}</div>
         <div class="kayit-detay">${esc(denetimOzet(k.checks))}</div>
-        <div class="kayit-alt">${k.note?esc(k.note)+' - ':''}${esc(k.createdByName||'')} - ${saatMetni(k.createdAt)}</div>`;
+        <div class="kayit-alt">${k.note?esc(k.note)+' - ':''}${esc(buyukAd(k.createdByName||''))} - ${saatMetni(k.createdAt)}</div>`;
       u.appendChild(li);});
   }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Kayitlar yuklenemedi.</li>';}
 }
@@ -1610,7 +1614,7 @@ async function logCiz(){
     u.innerHTML='';
     if(s.empty){u.innerHTML='<li class="bos-satir">Henuz kayit yok.</li>';return;}
     s.forEach(doc=>{const k=doc.data();const li=document.createElement('li');li.className='kayit-satiri';
-      li.innerHTML=`<div class="kayit-baslik">${saatMetni(k.at)} - ${esc(k.byName||'')}</div>
+      li.innerHTML=`<div class="kayit-baslik">${saatMetni(k.at)} - ${esc(buyukAd(k.byName||''))}</div>
         <div class="kayit-detay">${esc(k.entity||'')} - ${esc(k.action||'')}${k.aciklama?' - '+esc(k.aciklama):''}</div>`;
       u.appendChild(li);});
   }catch(err){console.error(err);h.textContent='Kayitlar yuklenemedi.';}
@@ -1660,7 +1664,7 @@ auth.onAuthStateChanged(async(u)=>{
     durum.profil=await profiliHazirla(u);
     const gm=saltOkunurMu();
     document.body.classList.toggle('salt-okunur',gm);
-    $('kullaniciAdi').textContent=adim()+(gm?' (Genel Mudur - salt okunur)':'');
+    $('kullaniciAdi').textContent=buyukAd(adim())+(gm?' (Genel Mudur - salt okunur)':'');
     await subeleriYukle();
     await kullanicilariYukle();
     if(!baslatildi){ sekmeleriKur(); baslatildi=true; }
