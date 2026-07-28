@@ -569,7 +569,7 @@ function kisiSecimKur(elId,secili){ const el=$(elId); if(!el) return; el.innerHT
 function kisiSecimAl(elId){ const el=$(elId); if(!el) return []; return Array.prototype.slice.call(el.querySelectorAll('input[type=checkbox]:checked')).map(function(c){return c.value;}); }
 function kisiSecimTemizle(elId){ const el=$(elId); if(!el) return; el.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;}); }
 // Inline DUZENLEME durumu (hangi kayit su an duzenleniyor)
-let duzenlenenGorev=null, duzenlenenAudit=null, duzenlenenBahis=null;
+let duzenlenenGorev=null, duzenlenenAudit=null, duzenlenenBahis=null, duzenlenenKasa=null;
 // Element-tabanli kisi secim (inline duzenleme formlari icin; id gerektirmez)
 function kisiSecimEl(secili){ const el=document.createElement('div'); el.className='kisi-secim'; const sec=Array.isArray(secili)?secili:[];
   takimRoster().forEach(function(k){ const l=document.createElement('label'); l.className='kisi-onay';
@@ -685,7 +685,7 @@ function sekmeleriKur(){
   btns.forEach(b=>b.addEventListener('click',()=>{
     btns.forEach(x=>x.classList.toggle('aktif',x===b));
     bols.forEach(s=>s.classList.toggle('gizli',s.id!==b.dataset.hedef));
-    duzenlenenGorev=null;duzenlenenAudit=null;duzenlenenBahis=null;   // sekme degisince duzenleme modundan cik
+    duzenlenenGorev=null;duzenlenenAudit=null;duzenlenenBahis=null;duzenlenenKasa=null;   // sekme degisince duzenleme modundan cik
     menuKapat();   // sekme secince mobil menuyu kapat
     if(b.dataset.hedef==='sekme-log') logCiz();
     if(b.dataset.hedef==='sekme-pano') panoCiz();
@@ -1725,9 +1725,10 @@ async function raporCiz(){
       if(kamera.length){
         kamera.forEach(o=>{if(o.personel)perEkle(o.personel,'kamera',o.zarar,o.ceza);});
         html+='<p class="mini-not" style="margin-top:10px"><b>Kamera incelemeleri:</b></p><ul class="rapor-liste">';
-        kamera.forEach(o=>{const bulgu=o.cameraChecked?(o.finding?('bulgu: '+esc(o.finding)):'incelendi, bulgu yok'):'henuz incelenmedi';
+        kamera.forEach(o=>{const durumK=o.resolved?'cozuldu':(o.cameraChecked?'incelendi':'henuz incelenmedi');
+          const bulguK=o.finding?(' - bulgu: '+esc(o.finding)):((o.cameraChecked||o.resolved)?' - bulgu yok':'');
           html+='<li><span class="rapor-tarih">'+(kameraTarihi(o)?uzunTarih(kameraTarihi(o)):'-')+'</span> '+
-            esc(o.amount)+' '+(YON_ETIKET[o.direction]||'')+' - '+bulgu+
+            esc(o.amount)+' '+(YON_ETIKET[o.direction]||'')+' - <b>'+durumK+'</b>'+bulguK+
             (o.personel?'<span class="personel-rozet">'+esc(o.personel)+'</span>':'')+
             (o.zarar?'<span class="zarar-rozet">'+tl(o.zarar)+'</span>':'')+(o.ceza?'<span class="ceza-rozet">'+saat(o.ceza)+'</span>':'')+
             ' <span class="mini-not">(inceleyen: '+esc(atananAdlari(o))+')</span></li>';});
@@ -1852,6 +1853,47 @@ async function kasaSil(id,ozet){
     await logYaz('silme','Kasa/Kamera',id,ozet);await kasaCiz();}
   catch(err){console.error(err);$('kHata').textContent='Silinemedi. Yetkiniz olmayabilir.';}
 }
+// Kasa/Kamera kaydi inline duzenleme formu
+function kasaDuzenleFormu(id,o){
+  const li=document.createElement('li');li.className='kayit-satiri';li.style.padding='12px';
+  const s1=document.createElement('div');s1.className='foto-yuk';
+  const tut=document.createElement('input');tut.type='number';tut.className='foto-not';tut.value=(o.amount!=null?o.amount:'');tut.placeholder='Tutar';tut.min='0';tut.step='0.01';tut.style.flex='0 1 140px';
+  const yon=document.createElement('select');yon.className='personel-sec';yon.innerHTML='<option value="eksik">Eksik</option><option value="fazla">Fazla</option>';yon.value=o.direction||'eksik';
+  s1.appendChild(tut);s1.appendChild(yon);
+  const s2=document.createElement('div');s2.className='foto-yuk';
+  const per=personelSelectEl(o.personel||'');
+  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.value=(o.zarar?o.zarar:'');zar.placeholder='Zarar (TL)';zar.min='0';zar.step='0.01';zar.style.flex='0 1 120px';
+  const cez=document.createElement('input');cez.type='number';cez.className='foto-not';cez.value=(o.ceza?o.ceza:'');cez.placeholder='Ceza (saat)';cez.min='0';cez.step='0.5';cez.style.flex='0 1 120px';
+  s2.appendChild(per);s2.appendChild(zar);s2.appendChild(cez);
+  const s3=document.createElement('div');s3.className='foto-yuk';
+  const bul=document.createElement('input');bul.type='text';bul.className='foto-not';bul.value=o.finding||'';bul.placeholder='Kamera bulgusu / not';
+  const itar=document.createElement('input');itar.type='date';itar.className='foto-not';itar.value=kameraTarihi(o)||'';itar.style.flex='0 1 160px';
+  s3.appendChild(bul);s3.appendChild(itar);
+  const s4=document.createElement('label');s4.className='onay-satiri';const chk=document.createElement('input');chk.type='checkbox';chk.checked=!!o.cameraChecked;
+  s4.appendChild(chk);s4.appendChild(document.createTextNode(' Kamera incelendi'));
+  const atLbl=document.createElement('div');atLbl.style.cssText='font-size:13px;font-weight:600;margin:8px 0 4px';atLbl.textContent='Kamerayi inceleyecek kisi(ler)';
+  const atEl=kisiSecimEl(atananIdler(o));
+  const arac=document.createElement('div');arac.className='satir-arac';arac.style.marginTop='8px';
+  const kaydet=document.createElement('button');kaydet.type='button';kaydet.className='ikincil kucuk';kaydet.textContent='Kaydet';
+  const iptal=document.createElement('button');iptal.type='button';iptal.className='ikincil kucuk';iptal.textContent='Iptal';
+  kaydet.onclick=()=>{const t=parseFloat(tut.value);
+    if(tut.value===''||isNaN(t)||t<0){$('kHata').textContent='Lutfen gecerli bir tutar girin.';return;}
+    const atan=kisiSecimElAl(atEl);
+    kasaGuncelle(id,{amount:t,direction:yon.value,personel:per.value,zarar:parseFloat(zar.value)||0,ceza:parseFloat(cez.value)||0,
+      finding:bul.value.trim(),reviewDate:itar.value||null,cameraChecked:chk.checked,assignees:atan,assignedTo:atan[0]||null});};
+  iptal.onclick=()=>{duzenlenenKasa=null;kasaCiz();};
+  arac.appendChild(kaydet);arac.appendChild(iptal);
+  li.appendChild(s1);li.appendChild(s2);li.appendChild(s3);li.appendChild(s4);li.appendChild(atLbl);li.appendChild(atEl);li.appendChild(arac);
+  return li;
+}
+async function kasaGuncelle(id,veri){
+  const h=$('kHata');h.textContent='';
+  try{
+    await db.collection('cashEvents').doc(id).update(veri);
+    await logYaz('guncelleme','Kasa/Kamera',id,veri.amount+' '+(YON_ETIKET[veri.direction]||'')+(veri.personel?(' ['+veri.personel+']'):''));
+    duzenlenenKasa=null; await kasaCiz();
+  }catch(err){console.error(err);h.textContent='Guncellenemedi. Tekrar deneyin.';}
+}
 async function kasaCiz(){
   const u=$('kListe');
   try{
@@ -1859,6 +1901,7 @@ async function kasaCiz(){
     u.innerHTML='';
     if(s.empty){u.innerHTML='<li class="bos-satir">Henuz kasa/kamera kaydi yok.</li>';return;}
     s.forEach(doc=>{const o=doc.data();const id=doc.id;
+      if(duzenlenenKasa===id){u.appendChild(kasaDuzenleFormu(id,o));return;}
       const li=document.createElement('li');li.className='kayit-satiri';
       const bas=document.createElement('div');bas.className='kayit-baslik';
       bas.textContent=`${o.date} - ${subeAdi(o.branchId)} - ${o.amount} ${YON_ETIKET[o.direction]||''}`+(o.resolved?' (cozuldu)':' (acik)');
@@ -1869,6 +1912,8 @@ async function kasaCiz(){
       const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
       const c=document.createElement('button');c.className='ikincil kucuk';c.textContent=o.resolved?'Yeniden ac':'Cozuldu isaretle';
       c.onclick=()=>kasaCozum(id,!o.resolved);alt.appendChild(c);
+      const dz=document.createElement('button');dz.className='ikincil kucuk';dz.textContent='Duzenle';
+      dz.onclick=()=>{duzenlenenKasa=id;kasaCiz();};alt.appendChild(dz);
       if(yoneticiMi()){const b=document.createElement('button');b.className='ikincil kucuk';b.textContent='Sil';
         b.onclick=()=>kasaSil(id,bas.textContent);alt.appendChild(b);}
       li.appendChild(bas);li.appendChild(det);li.appendChild(ata);li.appendChild(alt);u.appendChild(li);});
