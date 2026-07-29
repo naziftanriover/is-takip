@@ -252,7 +252,7 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 .kisi-onay input{width:auto;margin:0}
 /* Genel Mudur (salt-okunur) modu: veri girme/duzenleme arayuzleri gizli */
 body.salt-okunur #gForm, body.salt-okunur #denetimForm, body.salt-okunur #kForm, body.salt-okunur #aForm,
-body.salt-okunur .foto-yuk, body.salt-okunur .bahis-arac, body.salt-okunur .satir-arac,
+body.salt-okunur .foto-yuk, body.salt-okunur .bahis-arac, body.salt-okunur .satir-arac, body.salt-okunur .yeni-bahis,
 body.salt-okunur #rKaydet, body.salt-okunur #rOnceki, body.salt-okunur #rSonraki,
 body.salt-okunur #sKur, body.salt-okunur #sAdmin{display:none!important}
 body.salt-okunur .rota-tablo select{pointer-events:none}
@@ -718,8 +718,8 @@ function tarihEkle(s,gun){const d=tariheCevir(s);d.setDate(d.getDate()+gun);retu
 // 'YYYY-AA-GG' -> 'GG.AA' (kisa)
 function kisaTarih(s){const d=tariheCevir(s);const g=String(d.getDate()).padStart(2,'0');
   const a=String(d.getMonth()+1).padStart(2,'0');return `${g}.${a}`;}
-// 'YYYY-AA-GG' -> 'GG.AA.YYYY' (uzun)
-function uzunTarih(s){const d=tariheCevir(s);const g=String(d.getDate()).padStart(2,'0');
+// 'YYYY-AA-GG' -> 'GG.AA.YYYY' (uzun). Bos/gecersiz tarihte '-' doner (NaN.NaN.NaN olmaz).
+function uzunTarih(s){if(!s)return '-';const d=tariheCevir(s);if(isNaN(d.getTime()))return '-';const g=String(d.getDate()).padStart(2,'0');
   const a=String(d.getMonth()+1).padStart(2,'0');return `${g}.${a}.${d.getFullYear()}`;}
 // Haftanin sirasi (ROTA_ILK_HAFTA=Hafta 1). Yuvarlama DST kaymalarini tolere eder.
 function haftaNo(weekStart){
@@ -852,6 +852,7 @@ function sekmeleriKur(){
     if(b.dataset.hedef==='sekme-rapor') raporCiz();
     if(b.dataset.hedef==='sekme-karne') karneCiz();
     if(b.dataset.hedef==='sekme-ceza') cezaCiz();
+    if(b.dataset.hedef==='sekme-subeler') subeCiz();
   }));
 }
 
@@ -1949,7 +1950,7 @@ async function gorevCiz(){
         '<span class="mini-not gorev-ata">'+esc(atananAdlari(g))+(gorevTarihi(g)?' &middot; '+esc(gorevTarihi(g)):'')+'</span>';
       const sag=document.createElement('span');sag.className='gorev-sag';
       sag.innerHTML='<span class="rozet '+(bitti?'yesil':'kirmizi')+'">'+(bitti?'Yapildi':'Yapilmadi')+'</span>';
-      if(!yoneticiMi()){const gb=document.createElement('button');gb.className='ikincil kucuk';gb.textContent=bitti?'Geri ac':'Gorev bitti';
+      if(!saltOkunurMu()&&!cezaModuMu()){const gb=document.createElement('button');gb.className='ikincil kucuk';gb.textContent=bitti?'Geri ac':'Gorev bitti';
         gb.onclick=(e)=>{e.stopPropagation();gorevDurum(id,bitti?'todo':'done');};sag.appendChild(gb);}
       head.appendChild(sag);
       head.onclick=()=>{li.classList.toggle('acik');head.querySelector('.gorev-ok').innerHTML=li.classList.contains('acik')?'&#9660;':'&#9654;';};
@@ -2123,7 +2124,7 @@ async function raporCiz(){
             html+='<div class="rapor-bahis-ic"><span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span> '+esc(b.aciklama||'')+
               kr+tutarRozet(b.zarar)+
               ((b.geriAlinan&&b.zarar>0&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':((b.zarar>0&&b.geriAlinan)?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+'<div class="foto-galeri">';
-            b.fotolar.forEach((f,idx)=>{html+='<img class="foto-kucuk" src="'+f.dataUrl+'" alt="foto" onclick="lightboxAc(window._rG['+gi+'],'+idx+')">';});
+            b.fotolar.forEach((f,idx)=>{html+='<img class="foto-kucuk" src="'+esc(f.dataUrl||'')+'" alt="foto" onclick="lightboxAc(window._rG['+gi+'],'+idx+')">';});
             html+='</div></div>';});
           html+='</div>';
         });
@@ -2162,6 +2163,9 @@ async function karneTopla(scope){
   const denetimler=denetimSnap.docs.map(d=>({id:d.id,...d.data()}));
   const uyar=t=>scope.tum||(!!t&&String(t).slice(0,7)===scope.ay);
   const map={};
+  // Sirket geneli GERCEK toplam (her hata/bahis BIR KEZ sayilir; ayni bahiste birden cok zararli kisi
+  // olsa bile zarar/geri tek sayilir -> patron raporundaki toplam sismesin).
+  const ozet={zarar:0,geri:0};
   const KAYNAK_AD={denetim:'Gunluk denetim',bahis:'Hatali bahis',kamera:'Kamera'};
   const al=ad=>{ if(!map[ad]) map[ad]={ad:ad,toplam:0,zarar:0,ceza:0,geriAlinan:0,
     denetim:{say:0,zarar:0,ceza:0},bahis:{say:0,zarar:0,ceza:0},kamera:{say:0,zarar:0,ceza:0},sonTarih:'',hatalar:[]}; return map[ad]; };
@@ -2171,19 +2175,24 @@ async function karneTopla(scope){
     p.hatalar.push({kaynak:kaynak,kaynakAd:KAYNAK_AD[kaynak]||kaynak,tarih:tarih||'',zarar:z,ceza:c,geriAlinan:ga,
       sube:(detay&&detay.sube)||'',baslik:(detay&&detay.baslik)||'',aciklama:(detay&&detay.aciklama)||'',fotolar:(detay&&detay.fotolar)||[],odemeler:(detay&&detay.odemeler)||[]}); };
   // gunluk denetim yanlislari
-  denetimler.forEach(k=>{ if(!uyar(k.date))return; denetimYanlislar(k).forEach(x=>{ if(x.personel) ekle(x.personel,'denetim',k.date,x.zarar,x.ceza,
-    {sube:subeAdi(k.branchId),baslik:x.label,aciklama:x.aciklama,fotolar:[]}); }); });
+  denetimler.forEach(k=>{ if(!uyar(k.date))return; denetimYanlislar(k).forEach(x=>{ if(x.personel){ ozet.zarar+=Number(x.zarar)||0; ekle(x.personel,'denetim',k.date,x.zarar,x.ceza,
+    {sube:subeAdi(k.branchId),baslik:x.label,aciklama:x.aciklama,fotolar:[]}); } }); });
   // audit hatali bahisler (musteriden geri alinan da toplanir)
   audits.forEach(a=>{ const t=a.endDate||a.startDate||''; if(!uyar(t))return;
-    auditBahisleri(a,fotoHarita[a.id]||[]).forEach(b=>{ (b.kisiler||[]).forEach(k=>{ if(!k.ad)return;
+    auditBahisleri(a,fotoHarita[a.id]||[]).forEach(b=>{
+      const zararliVar=(b.kisiler||[]).some(k=>k.zararli&&k.ad);
+      if(zararliVar){ ozet.zarar+=Number(b.zarar)||0; ozet.geri+=Number(b.geriAlinan)||0; }   // bahis zarari/geri BIR KEZ
+      (b.kisiler||[]).forEach(k=>{ if(!k.ad)return;
       const kz=k.zararli?(Number(b.zarar)||0):0; const kg=k.zararli?(Number(b.geriAlinan)||0):0;
       ekle(k.ad,'bahis',t,kz,k.ceza,
         {sube:subeAdi(a.branchId),baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama,fotolar:b.fotolar.map(f=>f.dataUrl),odemeler:(k.zararli?bahisOdemeler(b):[])},kg); }); }); });
   // kamera / kasa
-  kasalar.forEach(o=>{ const t=kameraTarihi(o)||o.date||''; if(!uyar(t))return; if(o.personel) ekle(o.personel,'kamera',t,o.zarar,o.ceza,
-    {sube:subeAdi(o.branchId),baslik:(o.amount+' '+(YON_ETIKET[o.direction]||'')),aciklama:o.finding,fotolar:[],odemeler:bahisOdemeler(o)}, o.geriAlinan); });
+  kasalar.forEach(o=>{ const t=kameraTarihi(o)||o.date||''; if(!uyar(t))return; if(o.personel){ ozet.zarar+=Number(o.zarar)||0; ozet.geri+=Number(o.geriAlinan)||0; ekle(o.personel,'kamera',t,o.zarar,o.ceza,
+    {sube:subeAdi(o.branchId),baslik:(o.amount+' '+(YON_ETIKET[o.direction]||'')),aciklama:o.finding,fotolar:[],odemeler:bahisOdemeler(o)}, o.geriAlinan); } });
   Object.keys(map).forEach(k=>map[k].hatalar.sort((a,b)=>String(b.tarih).localeCompare(String(a.tarih))));
-  return Object.keys(map).map(k=>map[k]).sort((a,b)=>b.zarar-a.zarar||b.ceza-a.ceza||b.toplam-a.toplam||a.ad.localeCompare(b.ad,'tr'));
+  const sonuc=Object.keys(map).map(k=>map[k]).sort((a,b)=>b.zarar-a.zarar||b.ceza-a.ceza||b.toplam-a.toplam||a.ad.localeCompare(b.ad,'tr'));
+  sonuc.ozet=ozet;   // sirket geneli gercek toplam (karne TOPLAM satiri bunu kullanir)
+  return sonuc;
 }
 // Karne: personel satirina tiklayinca detay satirini ac/kapat
 function karneSatirAc(tr){ const d=tr.nextElementSibling; if(!d||!d.classList.contains('karne-detay'))return;
@@ -2200,9 +2209,10 @@ async function karneCiz(){
     const donem=scope.tum?'Tum zamanlar':('Ay: '+esc(scope.ay));
     if(!liste.length){ el.innerHTML='<p class="mini-not">'+donem+'</p><p class="bos-satir">Bu donemde personele bagli hata kaydi yok.</p>'; return; }
     const toplamHata=liste.reduce((s,p)=>s+p.toplam,0);
-    const toplamZarar=liste.reduce((s,p)=>s+p.zarar,0);
     const toplamCeza=liste.reduce((s,p)=>s+p.ceza,0);
-    const toplamGeri=liste.reduce((s,p)=>s+(p.geriAlinan||0),0);
+    // Zarar/geri TOPLAMI sirket geneli gercek toplamdan gelir (ayni bahiste cok zararli kisi olsa bile tek sayilir).
+    const toplamZarar=liste.ozet?liste.ozet.zarar:liste.reduce((s,p)=>s+p.zarar,0);
+    const toplamGeri=liste.ozet?liste.ozet.geri:liste.reduce((s,p)=>s+(p.geriAlinan||0),0);
     const toplamNet=toplamZarar-toplamGeri;
     let h='<p class="mini-not">'+donem+' &mdash; '+liste.length+' personel, '+toplamHata+' hata &middot; zarar <b class="'+tutarSinif(toplamZarar)+'">'+tl(toplamZarar)+'</b> &middot; geri alinan <b>'+tl(toplamGeri)+'</b> &middot; net <b class="'+tutarSinif(toplamNet)+'">'+tl(toplamNet)+'</b>'+(toplamNet<0?' (KAR)':'')+' &middot; ceza <b>'+saat(toplamCeza)+'</b></p>';
     h+='<p class="mini-not">Personelin uzerine tikla: tum hatalari acilir. Bir hataya tikla: aciklama ve resimler acilir. Fazla odeme (+) zarar, eksik odeme (-) sirket lehine (kar); net eksi ise sirket kara gecmis demektir.</p>';
@@ -2240,7 +2250,7 @@ async function karneCiz(){
               ((x.odemeler&&x.odemeler.length)?('<div class="mini-not" style="margin:4px 0"><b>Musteri odemeleri:</b></div><ul class="odeme-liste">'+
                 x.odemeler.map((o,oi)=>'<li><span class="odeme-no">'+(oi+1)+'. odeme</span> <span class="odeme-tarih">'+(o.tarih?uzunTarih(o.tarih):'(tarihsiz)')+'</span> &middot; <b>'+tl(o.tutar)+'</b></li>').join('')+'</ul>'+
                 '<div class="mini-not">Odenen: '+tl(x.geriAlinan||0)+' / Zarar: '+tl(x.zarar||0)+' / Kalan: '+tl(Math.max(0,(x.zarar||0)-(x.geriAlinan||0)))+'</div>'):'')+
-              (resimler.length?('<div class="foto-galeri">'+resimler.map((d,idx)=>'<img class="foto-kucuk" src="'+d+'" alt="hata resmi" onclick="event.stopPropagation();lightboxAc(window._kG['+gi+'],'+idx+')">').join('')+'</div>'):'')+
+              (resimler.length?('<div class="foto-galeri">'+resimler.map((d,idx)=>'<img class="foto-kucuk" src="'+esc(d||'')+'" alt="hata resmi" onclick="event.stopPropagation();lightboxAc(window._kG['+gi+'],'+idx+')">').join('')+'</div>'):'')+
             '</div></li>';
         });
         h+='</ul>';
@@ -2268,8 +2278,8 @@ async function cezaKalemleriGetir(scope){
     list.push({tur:'denetim',kaynakAd:'Gunluk denetim',docId:k.id,key:x.key,tarih:k.date,sube:subeAdi(k.branchId),
       personel:x.personel||'',baslik:x.label,aciklama:x.aciklama||'',zarar:Number(x.zarar)||0,ceza:Number(x.ceza)||0}); }); });
   audits.forEach(a=>{ const t=a.endDate||a.startDate||''; if(!uyar(t))return;
-    auditBahisleri(a,fotoHarita[a.id]||[]).forEach(b=>{ (b.kisiler||[]).forEach(k=>{ if(!k.ad)return;
-      list.push({tur:'bahis',kaynakAd:'Hatali bahis',docId:a.id,bahisId:b.bahisId,kisiAd:k.ad,tarih:t,sube:subeAdi(a.branchId),
+    auditBahisleri(a,fotoHarita[a.id]||[]).forEach(b=>{ (b.kisiler||[]).forEach((k,ki)=>{ if(!k.ad)return;
+      list.push({tur:'bahis',kaynakAd:'Hatali bahis',docId:a.id,bahisId:b.bahisId,kisiAd:k.ad,kisiIndex:ki,tarih:t,sube:subeAdi(a.branchId),
         personel:k.ad,baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama||'',zarar:(k.zararli?(Number(b.zarar)||0):0),ceza:Number(k.ceza)||0}); }); }); });
   kasalar.forEach(o=>{ const t=kameraTarihi(o)||o.date||''; if(!uyar(t))return;
     list.push({tur:'kamera',kaynakAd:'Kamera',docId:o.id,tarih:t,sube:subeAdi(o.branchId),
@@ -2290,8 +2300,15 @@ async function cezaYaz(kalem,val,btn){
       const bets=(Array.isArray(data.bets)?data.bets:[]).map(function(b){
         if(b&&b.bahisId===kalem.bahisId){
           let ks=Array.isArray(b.kisiler)?b.kisiler.slice():(b.personel?[{ad:b.personel,ceza:Number(b.ceza)||0,zararli:true}]:[]);
-          let bulundu=false; ks=ks.map(function(k){if(k.ad===kalem.kisiAd){bulundu=true;return Object.assign({},k,{ceza:v});}return k;});
-          if(!bulundu) ks.push({ad:kalem.kisiAd,ceza:v,zararli:false});
+          const idx=(typeof kalem.kisiIndex==='number')?kalem.kisiIndex:-1;
+          if(idx>=0&&idx<ks.length&&(ks[idx].ad===kalem.kisiAd||!kalem.kisiAd)){
+            // dogru satiri INDEX ile guncelle (ayni ada sahip iki kisi karismasin)
+            ks=ks.map(function(k,ki){return ki===idx?Object.assign({},k,{ceza:v}):k;});
+          } else {
+            // index eslesmezse ada gore ILK eslesen; yoksa ekle
+            let bulundu=false; ks=ks.map(function(k){if(!bulundu&&k.ad===kalem.kisiAd){bulundu=true;return Object.assign({},k,{ceza:v});}return k;});
+            if(!bulundu) ks.push({ad:kalem.kisiAd,ceza:v,zararli:false});
+          }
           return Object.assign({},b,{kisiler:ks});
         } return b;});
       await ref.update({bets:bets});
