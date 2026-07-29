@@ -131,12 +131,12 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 .pano-kart{background:var(--renk-kart);border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);
   box-shadow:var(--golge);padding:16px;margin-bottom:18px}
 .rozet{display:inline-block;padding:2px 10px;border-radius:20px;color:#fff;font-size:12px;font-weight:700}
-.rozet.yesil{background:var(--yesil)}.rozet.kirmizi{background:var(--kirmizi)}
+.rozet.yesil{background:var(--yesil)}.rozet.kirmizi{background:var(--kirmizi)}.rozet.amber{background:var(--amber)}.rozet.mor{background:var(--kamera)}
 .gorev-satiri{display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:8px 0;border-bottom:1px solid var(--renk-cizgi)}
 .gorev-satiri:last-child{border-bottom:none}
 .nokta{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}
-.nokta.yesil{background:var(--yesil)}.nokta.kirmizi{background:var(--kirmizi)}
+.nokta.yesil{background:var(--yesil)}.nokta.kirmizi{background:var(--kirmizi)}.nokta.amber{background:var(--amber)}.nokta.mor{background:var(--kamera)}
 /* Rota tablosu */
 .rota-kaydir{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 4px}
 .rota-tablo{width:100%;min-width:620px;border-collapse:collapse;font-size:13px;table-layout:fixed}
@@ -723,12 +723,16 @@ async function kullanicilariYukle(){
 // ================== DASHBOARD ==================
 async function panoCiz(){
   const hb=haftaBasi(bugun());
-  // Gorevleri bir kez cek (hem gorev paneli hem rota panosu kullanir)
-  let gorevler=[];
+  // Gorevleri ve kamera kayitlarini bir kez cek (gorev paneli + rota panosu kullanir)
+  let gorevler=[], kameralar=[];
   try{
-    const s=await db.collection('tasks').orderBy('createdAt','desc').limit(100).get();
-    gorevler=s.docs.map(d=>({id:d.id,...d.data()}));
-    panoGorevleriCiz(gorevler);
+    const [sg,sk]=await Promise.all([
+      db.collection('tasks').orderBy('createdAt','desc').limit(100).get(),
+      db.collection('cashEvents').orderBy('date','desc').limit(100).get()
+    ]);
+    gorevler=sg.docs.map(d=>({id:d.id,...d.data()}));
+    kameralar=sk.docs.map(d=>({id:d.id,...d.data()}));
+    panoGorevleriCiz(gorevler,kameralar);
   }catch(err){console.error(err);$('panoGorevler').innerHTML='<p class="bos-satir">Gorevler yuklenemedi.</p>';}
   // Audit durumu kutusu (sube bazinda: son denetim, kac gundur, son ticket)
   try{
@@ -745,12 +749,6 @@ async function panoCiz(){
         (p.zarar?'<span class="zarar-rozet">'+tl(p.zarar)+'</span>':'')+(p.ceza?'<span class="ceza-rozet">'+saat(p.ceza)+'</span>':'')+'</span></li>';});
       h+='</ul>'; pe.innerHTML=h; }
   }catch(err){console.error(err);$('panoPersonel').innerHTML='<p class="bos-satir">Personel ozeti yuklenemedi.</p>';}
-  // Kamera atamalari (bu hafta rota hucrelerinde EXTRA gosterilir)
-  let kameralar=[];
-  try{
-    const s=await db.collection('cashEvents').orderBy('date','desc').limit(100).get();
-    kameralar=s.docs.map(d=>({id:d.id,...d.data()}));
-  }catch(err){console.error(err);}
   // Rota panosu (bu hafta) - gorev ve kamera atamalari ilgili gun hucresinde EXTRA gosterilir
   const rEl=$('panoRota');
   try{
@@ -766,9 +764,10 @@ async function panoCiz(){
 function gorevTarihi(g){return g.taskDate||g.dueDate||null;}
 
 // Dashboard gorev panelini cizer.
-function panoGorevleriCiz(gorevler){
+function panoGorevleriCiz(gorevler,kameralar){
   const gEl=$('panoGorevler');
-  if(!gorevler.length){gEl.innerHTML='<p class="bos-satir">Henuz gorev yok.</p>';return;}
+  const aktifKamera=(kameralar||[]).filter(o=>!o.resolved);
+  if(!gorevler.length && !aktifKamera.length){gEl.innerHTML='<p class="bos-satir">Henuz gorev yok.</p>';return;}
   let html='';
   gorevler.forEach(g=>{
     const bitti=g.status==='done';
@@ -777,6 +776,13 @@ function panoGorevleriCiz(gorevler){
       `<b>${esc(atananAdlari(g))}</b> - ${esc(g.title)}`+
       `${gt?' <span class="mini-not">('+esc(gt)+')</span>':''}</span>`+
       `<span class="rozet ${bitti?'yesil':'kirmizi'}">${bitti?'Yapildi':'Yapilmadi'}</span></div>`;
+  });
+  aktifKamera.forEach(o=>{
+    const d=kameraDurum(o);const kt=kameraTarihi(o);
+    html+=`<div class="gorev-satiri"><span><span class="nokta ${d.css}"></span>`+
+      `<b>${esc(atananAdlari(o))}</b> - ${kameraIsOzeti(o)}`+
+      `${kt?' <span class="mini-not">('+esc(kt)+')</span>':''}</span>`+
+      `<span class="rozet ${d.css}">${esc(d.metin)}</span></div>`;
   });
   gEl.innerHTML=html;
 }
@@ -805,6 +811,16 @@ function rotaGorevHaritasi(gorevler,weekStart){
 
 // Kamera inceleme tarihi: reviewDate yoksa olay tarihi (date).
 function kameraTarihi(o){return o.reviewDate||o.date||null;}
+// Kamera inceleme is durumu (gorev/dashboard rozeti icin)
+function kameraDurum(o){
+  if(o.resolved) return {metin:'Cozuldu',css:'yesil'};
+  if(o.cameraChecked) return o.finding?{metin:'Bulgu bulundu',css:'kirmizi'}:{metin:'Incelendi',css:'yesil'};
+  return {metin:'Inceleniyor',css:'amber'};
+}
+// Kamera kaydinin kisa is ozeti (or. "Kamera: Alsancak - 5000 Eksik")
+function kameraIsOzeti(o){
+  return 'Kamera: '+esc(subeAdi(o.branchId))+' - '+esc(o.amount)+' '+esc(YON_ETIKET[o.direction]||'')+(o.personel?(' / '+esc(o.personel)):'');
+}
 
 // Bu haftanin rota gun hucrelerine dusecek kamera atamalari.
 // Donen yapi: { rotaKisiAdi: { gunIndex: ['Kamera: <sube>', ...] } }
@@ -1572,10 +1588,15 @@ async function auditCiz(){
 async function gorevCiz(){
   const u=$('gListe');
   try{
-    const s=await db.collection('tasks').orderBy('createdAt','desc').limit(50).get();
+    const [s,kSnap]=await Promise.all([
+      db.collection('tasks').orderBy('createdAt','desc').limit(50).get(),
+      db.collection('cashEvents').orderBy('date','desc').limit(50).get()
+    ]);
     const fotoHarita=await gorevFotoHaritasi();
+    const kameralar=kSnap.docs.map(d=>({id:d.id,...d.data()}));
+    const aktifKamera=kameralar.filter(o=>!o.resolved);
     u.innerHTML='';
-    if(s.empty){u.innerHTML='<li class="bos-satir">Henuz gorev yok.</li>';return;}
+    if(s.empty && !aktifKamera.length){u.innerHTML='<li class="bos-satir">Henuz gorev yok.</li>';return;}
     s.forEach(doc=>{const g=doc.data();const id=doc.id;const fotolar=fotoHarita[id]||[];
       if(id===duzenlenenGorev){ u.appendChild(gorevDuzenleFormu(id,g)); return; }
       const li=document.createElement('li');li.className='kayit-satiri';
@@ -1619,6 +1640,20 @@ async function gorevCiz(){
       if(g.createdBy===durum.uid||yoneticiMi()){const b=document.createElement('button');
         b.className='ikincil kucuk';b.textContent='Sil';b.onclick=()=>gorevSil(id,g.title);alt.appendChild(b);}
       li.appendChild(alt);u.appendChild(li);});
+    // ---- KAMERA INCELEMELERI (is olarak) ----
+    if(aktifKamera.length){
+      const bas=document.createElement('li');bas.className='bos-satir';bas.style.cssText='font-weight:700;color:var(--kamera);background:none';
+      bas.textContent='Kamera incelemeleri (devam eden)';u.appendChild(bas);
+      aktifKamera.forEach(o=>{const d=kameraDurum(o);const kt=kameraTarihi(o);
+        const li=document.createElement('li');li.className='kayit-satiri';
+        const b1=document.createElement('div');b1.className='kayit-baslik';
+        b1.innerHTML=kameraIsOzeti(o)+' <span class="rozet '+d.css+'">'+esc(d.metin)+'</span>';
+        const b2=document.createElement('div');b2.className='kayit-detay';
+        b2.textContent='Inceleyen: '+atananAdlari(o)+(kt?' - Inceleme tarihi: '+kt:'')+(o.finding?' - Bulgu: '+o.finding:'');
+        const b3=document.createElement('div');b3.className='kayit-alt';
+        b3.innerHTML='<span class="mini-not">Detay ve duzenleme icin <b>Kasa &amp; Kamera</b> sekmesi</span>';
+        li.appendChild(b1);li.appendChild(b2);li.appendChild(b3);u.appendChild(li);});
+    }
   }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Gorevler yuklenemedi.</li>';}
 }
 // Gorev inline duzenleme formu
