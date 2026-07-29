@@ -112,6 +112,10 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 .odeme-tarih{font-weight:600}
 .odeme-ekle{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px}
 .odeme-ekle input{padding:7px 8px;font-size:14px}
+.kisiler-ed{margin:2px 0}
+.kisi-satir{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;padding:6px;border:1px solid var(--renk-cizgi);border-radius:8px;background:#fff}
+.kisi-satir .personel-sec{margin:0}
+.kisi-satir label.onay-satiri{flex:0 0 auto}
 .karne-ceza{font-weight:700;color:#b45309}
 .karne-geri{font-weight:700;color:#15803d}
 .karne-tablo{width:100%;border-collapse:collapse;font-size:14px}
@@ -314,6 +318,7 @@ body.ceza-modu .ceza-btn{display:block!important}
     <button class="sekme-btn ceza-btn" data-hedef="sekme-ceza" type="button">Ceza</button>
     <button class="sekme-btn" data-hedef="sekme-log" type="button">Denetim Izi</button>
     <button class="sekme-btn" data-hedef="sekme-subeler" type="button">Subeler</button>
+    <button class="sekme-btn" data-hedef="sekme-yedek" type="button">Yedekleme</button>
   </nav>
 
   <main class="icerik">
@@ -512,6 +517,23 @@ body.ceza-modu .ceza-btn{display:block!important}
           <button id="sKur" type="button">Varsayilan subeleri olustur (Alsancak, Kasgar, Zeytinlik, Itimat)</button>
         </div>
       </div>
+    </section>
+
+    <!-- YEDEKLEME -->
+    <section id="sekme-yedek" class="sekme-bolum gizli">
+      <h2>Yedekleme</h2>
+      <div class="pano-kart">
+        <h3 style="margin-top:0">Yedek indir</h3>
+        <p class="mini-not">Tum verileri (denetimler, auditler, hatali bahisler, kasa/kamera, personel hatalari, cezalar, odemeler, fotograflar, rota) tek dosyada bilgisayariniza indirir. Guvenli bir yerde saklayin (or. ayda bir, raporu dosyalarken).</p>
+        <button id="yedekBtn" type="button">Yedek indir (JSON)</button>
+      </div>
+      <div class="pano-kart satir-arac">
+        <h3 style="margin-top:0">Yedekten geri yukle</h3>
+        <p class="mini-not">Bir yedek dosyasi secip verileri Firebase'e geri yazar. Eksik kayitlari geri getirir, ayni ID'li kayitlarin uzerine yazar. Once <b>Yedek indir</b> ile mevcut halini almaniz onerilir.</p>
+        <input id="yedekDosya" type="file" accept="application/json,.json" />
+        <button id="yedekYukleBtn" type="button" class="ikincil" style="margin-left:8px">Secilen dosyadan geri yukle</button>
+      </div>
+      <p id="yedekDurum" class="mini-not" style="margin-top:10px"></p>
     </section>
   </main>
   </div>
@@ -725,6 +747,71 @@ async function logYaz(action,entity,entityId,aciklama){
       entityId:entityId||null, aciklama:aciklama||'', at:SUNUCU_ZAMAN()
     });
   }catch(e){console.error('[is-takip] log yazilamadi',e);}
+}
+
+// ================== YEDEKLEME ==================
+const YEDEK_KOLONLAR=['branches','users','shifts','dailyAudits','tasks','cashEvents','audits','photos','auditLog'];
+// Tum verileri JSON olarak indirir (bilgisayara kaydeder).
+async function yedekIndir(){
+  const st=$('yedekDurum');const btn=$('yedekBtn');st.style.color='';st.textContent='Yedek hazirlaniyor...';btn.disabled=true;
+  try{
+    const yedek={uygulama:'Security',surum:1,olusturuldu:new Date().toISOString(),veriler:{}};
+    let toplam=0;
+    for(const c of YEDEK_KOLONLAR){
+      const s=await db.collection(c).get();
+      yedek.veriler[c]=s.docs.map(d=>Object.assign({__id:d.id},d.data()));
+      toplam+=s.size;
+    }
+    const metin=JSON.stringify(yedek);
+    const blob=new Blob([metin],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const zaman=new Date().toTimeString().slice(0,5).replace(':','');
+    const a=document.createElement('a');a.href=url;a.download='security-yedek-'+bugun()+'-'+zaman+'.json';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+    st.style.color='var(--yesil)';st.textContent='Yedek indirildi: '+toplam+' kayit, '+Math.round(metin.length/1024)+' KB. Dosyayi guvenli bir yerde saklayin.';
+    try{await logYaz('yedek','Yedekleme',null,toplam+' kayit indirildi');}catch(e){}
+  }catch(err){console.error(err);st.style.color='';st.textContent='Yedek alinamadi. Tekrar deneyin.';}
+  finally{btn.disabled=false;}
+}
+// {seconds,nanoseconds} -> Firestore Timestamp (geri yukleme icin)
+function yedekZaman(o){
+  if(o&&typeof o==='object'&&typeof o.seconds==='number'){
+    try{return firebase.firestore.Timestamp.fromMillis(o.seconds*1000+Math.floor((o.nanoseconds||0)/1e6));}catch(e){return o;}
+  }
+  return o;
+}
+// Bir yedek dosyasindan verileri Firebase'e geri yazar (best-effort).
+async function yedekYukle(file){
+  const st=$('yedekDurum');st.style.color='';
+  if(!file){st.textContent='Once bir yedek dosyasi secin.';return;}
+  if(typeof confirm==='function'&&!confirm('DIKKAT: Geri yukleme eksik kayitlari geri getirir ve ayni ID li kayitlarin uzerine yazar. Devam edilsin mi?'))return;
+  const btn=$('yedekYukleBtn');btn.disabled=true;st.textContent='Geri yukleniyor...';
+  try{
+    const metin=await file.text();
+    const yedek=JSON.parse(metin);
+    if(!yedek||!yedek.veriler){st.textContent='Gecersiz yedek dosyasi.';btn.disabled=false;return;}
+    const zamanAlanlar=['createdAt','updatedAt','at'];
+    let ok=0,hata=0;
+    for(const c of Object.keys(yedek.veriler)){
+      const arr=yedek.veriler[c]||[];
+      for(const item of arr){
+        const id=item.__id||item.id; if(!id){hata++;continue;}
+        const veri=Object.assign({},item);delete veri.__id;delete veri.id;
+        zamanAlanlar.forEach(f=>{if(veri[f]!==undefined&&veri[f]!==null)veri[f]=yedekZaman(veri[f]);});
+        // sahiplik alanlarini mevcut kullaniciya cek (guvenlik kurallari icin)
+        if(Object.prototype.hasOwnProperty.call(veri,'createdBy')) veri.createdBy=durum.uid;
+        if(Object.prototype.hasOwnProperty.call(veri,'uploadedBy')) veri.uploadedBy=durum.uid;
+        try{ await db.collection(c).doc(id).set(veri); ok++; }
+        catch(e){ console.error('[yedek]',c,id,e); hata++; }
+      }
+      st.textContent='Geri yukleniyor... ('+ok+' tamam, '+hata+' hata)';
+    }
+    st.style.color=hata?'':'var(--yesil)';
+    st.textContent='Geri yukleme bitti: '+ok+' kayit yazildi'+(hata?(', '+hata+' kayit yazilamadi (yetki/kural olabilir)'):'')+'. Sayfayi yenileyin (Ctrl+Shift+R).';
+    try{await logYaz('yedek','Yedekleme',null,'geri yukleme: '+ok+' ok, '+hata+' hata');}catch(e){}
+  }catch(err){console.error(err);st.textContent='Geri yukleme basarisiz. Dosya bozuk olabilir.';}
+  finally{btn.disabled=false;}
 }
 
 // ================== GIRIS ==================
@@ -1473,10 +1560,10 @@ async function auditBahisEkle(auditId,ticketNo,aciklama,files){
 // Bir audit'in bahislerini birlestir: audit.bets (foto olmasa da duran bahisler) + fotolar (bahisId ile).
 function auditBahisleri(audit,fotolar){
   const map=new Map();
-  (audit.bets||[]).forEach(b=>{ if(b&&b.bahisId) map.set(b.bahisId,{bahisId:b.bahisId,ticketNo:b.ticketNo||'',aciklama:b.aciklama||'',personel:b.personel||'',zarar:Number(b.zarar)||0,ceza:Number(b.ceza)||0,geriAlinan:Number(b.geriAlinan)||0,odemeler:Array.isArray(b.odemeler)?b.odemeler:[],fotolar:[]}); });
+  (audit.bets||[]).forEach(b=>{ if(b&&b.bahisId) map.set(b.bahisId,{bahisId:b.bahisId,ticketNo:b.ticketNo||'',aciklama:b.aciklama||'',personel:b.personel||'',zarar:Number(b.zarar)||0,ceza:Number(b.ceza)||0,geriAlinan:Number(b.geriAlinan)||0,odemeler:Array.isArray(b.odemeler)?b.odemeler:[],kisiler:bahisKisiler(b),fotolar:[]}); });
   const sirali=fotolar.slice().reverse();   // eski -> yeni
   sirali.forEach(f=>{const key=f.bahisId||('tek-'+f.id);
-    if(!map.has(key)) map.set(key,{bahisId:key,ticketNo:f.ticketNo||'',aciklama:(f.aciklama!=null&&f.aciklama!=='')?f.aciklama:(f.note||''),personel:f.personel||'',zarar:Number(f.zarar)||0,ceza:Number(f.ceza)||0,geriAlinan:Number(f.geriAlinan)||0,odemeler:[],fotolar:[]});
+    if(!map.has(key)) map.set(key,{bahisId:key,ticketNo:f.ticketNo||'',aciklama:(f.aciklama!=null&&f.aciklama!=='')?f.aciklama:(f.note||''),personel:f.personel||'',zarar:Number(f.zarar)||0,ceza:Number(f.ceza)||0,geriAlinan:Number(f.geriAlinan)||0,odemeler:[],kisiler:bahisKisiler(f),fotolar:[]});
     const g=map.get(key);
     if(!g.ticketNo&&f.ticketNo) g.ticketNo=f.ticketNo;
     if(!g.aciklama&&(f.aciklama||f.note)) g.aciklama=f.aciklama||f.note;
@@ -1486,6 +1573,33 @@ function auditBahisleri(audit,fotolar){
     if(!g.geriAlinan&&f.geriAlinan) g.geriAlinan=Number(f.geriAlinan)||0;
     g.fotolar.push(f);});
   return Array.from(map.values());
+}
+// Bir bahisin SUCLU personelleri: [{ad, ceza(saat), zararli(bool)}]. Eski tek personel -> tek kisi (zararli:true).
+function bahisKisiler(b){
+  if(b&&Array.isArray(b.kisiler)&&b.kisiler.length) return b.kisiler.map(function(k){return {ad:k.ad||'',ceza:Number(k.ceza)||0,zararli:!!k.zararli};});
+  if(b&&b.personel) return [{ad:b.personel,ceza:Number(b.ceza)||0,zararli:true}];
+  return [];
+}
+// Bahis kisilerini ekleme/duzenleme editoru. Her satir: personel + ceza(saat) + "zarar bu kisiye" tik.
+function kisilerEditor(mevcut){
+  const wrap=document.createElement('div');wrap.className='kisiler-ed';
+  const liste=document.createElement('div');liste.className='kisiler-liste';wrap.appendChild(liste);
+  function satirEkle(k){
+    const row=document.createElement('div');row.className='kisi-satir';
+    const per=personelSelectEl(k&&k.ad||'');
+    const cez=document.createElement('input');cez.type='number';cez.className='foto-not';cez.placeholder='ceza (saat)';cez.step='0.5';cez.min='0';cez.style.flex='0 1 110px';if(k&&k.ceza)cez.value=k.ceza;
+    const zl=document.createElement('label');zl.className='onay-satiri';zl.style.margin='0';zl.title='Zarar (TL) bu kisiye yansisin';
+    const zc=document.createElement('input');zc.type='checkbox';if(k&&k.zararli)zc.checked=true;zl.appendChild(zc);zl.appendChild(document.createTextNode(' zarar bu kisiye'));
+    const sil=document.createElement('button');sil.type='button';sil.className='ikincil kucuk';sil.textContent='x';sil.title='Kisiyi cikar';sil.onclick=function(){row.remove();};
+    row._al=function(){return {ad:per.value,ceza:parseFloat(cez.value)||0,zararli:zc.checked};};
+    row.appendChild(per);row.appendChild(cez);row.appendChild(zl);row.appendChild(sil);liste.appendChild(row);
+  }
+  (mevcut&&mevcut.length?mevcut:[{zararli:true}]).forEach(satirEkle);
+  const ekle=document.createElement('button');ekle.type='button';ekle.className='ikincil kucuk';ekle.textContent='+ Suclu personel ekle';ekle.style.marginTop='4px';
+  ekle.onclick=function(){satirEkle({zararli:false});};
+  wrap.appendChild(ekle);
+  wrap._al=function(){const out=[];liste.querySelectorAll('.kisi-satir').forEach(function(r){const v=r._al();if(v.ad)out.push(v);});return out;};
+  return wrap;
 }
 // Bir bahisin musteri odemeleri (taksitler): [{tutar,tarih}]. Eski tek 'geriAlinan' -> tek tarihsiz odeme.
 function bahisOdemeler(b){
@@ -1531,16 +1645,17 @@ async function bahisOdemeSil(auditId,bahisId,idx){
   }catch(err){console.error(err);h.textContent='Silinemedi.';}
 }
 // Audit'e YENI hatali bahis ekler (foto olmadan). audit.bets dizisine yazar.
-async function auditBahisYeni(auditId,ticketNo,aciklama,personel,zarar,ceza){
+async function auditBahisYeni(auditId,ticketNo,aciklama,zarar,kisiler){
   const h=$('aHata');h.style.color='';h.textContent='';
   const bahisId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('b'+Date.now()+Math.random().toString(16).slice(2));
   try{
     const ref=db.collection('audits').doc(auditId);
     const snap=await ref.get();const data=snap.data()||{};
     const bets=Array.isArray(data.bets)?data.bets.slice():[];
-    bets.push({bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',personel:personel||'',zarar:Number(zarar)||0,ceza:Number(ceza)||0});
+    bets.push({bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});
     await ref.update({bets:bets});
-    await logYaz('olusturma','Bahis',auditId,(ticketNo?('#'+ticketNo+' '):'')+(aciklama||'')+(personel?(' ['+personel+']'):''));
+    const adlar=(kisiler||[]).map(function(k){return k.ad;}).join(', ');
+    await logYaz('olusturma','Bahis',auditId,(ticketNo?('#'+ticketNo+' '):'')+(aciklama||'')+(adlar?(' ['+adlar+']'):''));
     await auditCiz();
   }catch(err){console.error(err);h.textContent='Bahis eklenemedi. Tekrar deneyin.';}
 }
@@ -1569,21 +1684,21 @@ function bahisDuzenleFormu(auditId,b){
   const yuk=document.createElement('div');yuk.className='foto-yuk';
   const t=document.createElement('input');t.type='text';t.className='foto-not';t.value=b.ticketNo||'';t.placeholder='Ticket no';t.maxLength=40;t.style.flex='0 1 150px';
   const n=document.createElement('input');n.type='text';n.className='foto-not';n.value=b.aciklama||'';n.placeholder='Aciklama';
-  const per=personelSelectEl(b.personel||'');
-  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.value=(b.zarar?b.zarar:'');zar.placeholder='Zarar (fazla +, eksik -)';zar.title='Fazla odeme icin arti, eksik odeme (sirket lehine) icin eksi girin';zar.step='0.01';zar.style.flex='0 1 120px';
-  const cez=document.createElement('input');cez.type='number';cez.className='foto-not';cez.value=(b.ceza?b.ceza:'');cez.placeholder='Ceza (saat)';cez.min='0';cez.step='0.5';cez.style.flex='0 1 120px';
-  yuk.appendChild(t);yuk.appendChild(n);yuk.appendChild(per);yuk.appendChild(zar);yuk.appendChild(cez);
-  const not2=document.createElement('div');not2.className='mini-not';not2.textContent='Musteri odemeleri asagidaki "geri alim" bolumunden eklenir.';
+  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.value=(b.zarar?b.zarar:'');zar.placeholder='Zarar (fazla +, eksik -)';zar.title='Fazla odeme icin arti, eksik odeme (sirket lehine) icin eksi girin';zar.step='0.01';zar.style.flex='0 1 160px';
+  yuk.appendChild(t);yuk.appendChild(n);yuk.appendChild(zar);
+  const kbas=document.createElement('div');kbas.className='mini-not';kbas.style.margin='8px 0 2px';kbas.textContent='Suclu personel(ler) - her birine ayri ceza, zarar tik ile secilir:';
+  const ked=kisilerEditor(bahisKisiler(b));
+  const not2=document.createElement('div');not2.className='mini-not';not2.style.marginTop='4px';not2.textContent='Musteri odemeleri asagidaki "geri alim" bolumunden eklenir.';
   const arac=document.createElement('div');arac.className='bahis-arac';
   const kaydet=document.createElement('button');kaydet.type='button';kaydet.className='ikincil kucuk';kaydet.textContent='Kaydet';
   const iptal=document.createElement('button');iptal.type='button';iptal.className='ikincil kucuk';iptal.textContent='Iptal';
-  kaydet.onclick=()=>auditBahisGuncelle(auditId,b.bahisId,t.value.trim(),n.value.trim(),per.value,parseFloat(zar.value)||0,parseFloat(cez.value)||0);
+  kaydet.onclick=()=>auditBahisGuncelle(auditId,b.bahisId,t.value.trim(),n.value.trim(),parseFloat(zar.value)||0,ked._al());
   iptal.onclick=()=>{duzenlenenBahis=null;auditCiz();};
   arac.appendChild(kaydet);arac.appendChild(iptal);
-  li.appendChild(yuk);li.appendChild(not2);li.appendChild(arac);
+  li.appendChild(yuk);li.appendChild(kbas);li.appendChild(ked);li.appendChild(not2);li.appendChild(arac);
   return li;
 }
-async function auditBahisGuncelle(auditId,bahisId,ticketNo,aciklama,personel,zarar,ceza){
+async function auditBahisGuncelle(auditId,bahisId,ticketNo,aciklama,zarar,kisiler){
   const h=$('aHata');h.style.color='';h.textContent='';
   try{
     const ref=db.collection('audits').doc(auditId);
@@ -1591,8 +1706,8 @@ async function auditBahisGuncelle(auditId,bahisId,ticketNo,aciklama,personel,zar
     let bets=Array.isArray(data.bets)?data.bets.slice():[];
     let bulundu=false;
     // Object.assign ile odemeler/geriAlinan gibi geri-alim alanlari KORUNUR
-    bets=bets.map(function(x){ if(x&&x.bahisId===bahisId){bulundu=true;return Object.assign({},x,{ticketNo:ticketNo||'',aciklama:aciklama||'',personel:personel||'',zarar:Number(zarar)||0,ceza:Number(ceza)||0});} return x; });
-    if(!bulundu) bets.push({bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',personel:personel||'',zarar:Number(zarar)||0,ceza:Number(ceza)||0});
+    bets=bets.map(function(x){ if(x&&x.bahisId===bahisId){bulundu=true;return Object.assign({},x,{ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});} return x; });
+    if(!bulundu) bets.push({bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});
     await ref.update({bets:bets});
     await logYaz('guncelleme','Bahis',auditId,'#'+(ticketNo||''));
     duzenlenenBahis=null; await auditCiz();
@@ -1624,17 +1739,22 @@ function auditBahisBlogu(kutu,audit,fotolar){
       if(duzenlenenBahis===audit.id+'|'+b.bahisId){ bl.appendChild(bahisDuzenleFormu(audit.id,b)); return; }
       const bo=document.createElement('li');bo.className='bahis-oge';
       const bbas=document.createElement('div');bbas.className='bahis-bas';
+      const kisiler=b.kisiler||[];
+      const kisiRozet=kisiler.map(k=>'<span class="personel-rozet">'+esc(k.ad)+(k.ceza?(' '+k.ceza+'s'):'')+(k.zararli?' &#9679;':'')+'</span>').join('');
       bbas.innerHTML='<span class="bahis-ok">&#9654;</span>'+
         '<span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span>'+
         '<span class="bahis-ack">'+esc(b.aciklama||'')+'</span>'+
-        (b.personel?'<span class="personel-rozet">'+esc(b.personel)+'</span>':'')+
+        kisiRozet+
         tutarRozet(b.zarar)+
-        (b.ceza?'<span class="ceza-rozet">'+saat(b.ceza)+'</span>':'')+
         ((b.zarar>0&&b.geriAlinan&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':((b.zarar>0&&b.geriAlinan)?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+
         '<span class="bahis-say">'+resimler.length+' resim</span>';
       const bgov=document.createElement('div');bgov.className='bahis-govde';
       b.fotolar.forEach((f,idx)=>{const im=document.createElement('img');im.src=f.dataUrl;im.className='foto-kucuk';im.alt='hatali odeme';
         im.onclick=(e)=>{e.stopPropagation();lightboxAc(resimler,idx);};bgov.appendChild(im);});
+      // ---- Suclu personel(ler) ----
+      if(kisiler.length){const kd=document.createElement('div');kd.className='mini-not';kd.style.margin='4px 0';
+        kd.innerHTML='<b>Suclu personel:</b> '+kisiler.map(k=>esc(k.ad)+(k.ceza?(' ('+saat(k.ceza)+' ceza)'):'')+(k.zararli?' - zarar bu kisiye':'')).join(' &middot; ');
+        bgov.appendChild(kd);}
       // ---- Musteriden geri alim: sadece FAZLA odemede (zarar>0). Eksik odeme (kar) -> geri alim yok. ----
       if((Number(b.zarar)||0)>0){
       const galma=document.createElement('div');galma.className='geri-alma';
@@ -1666,7 +1786,7 @@ function auditBahisBlogu(kutu,audit,fotolar){
       const arac=document.createElement('div');arac.className='bahis-arac';
       const lbl=document.createElement('label');lbl.className='ikincil kucuk foto-btn';lbl.textContent='+ Foto cek / ekle';
       const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.style.display='none';inp.setAttribute('capture','environment');
-      inp.onchange=()=>{if(inp.files&&inp.files.length){auditFotoEkle(audit.id,b.bahisId,b.ticketNo,b.aciklama,Array.from(inp.files),b.personel,b.ceza);}};
+      inp.onchange=()=>{if(inp.files&&inp.files.length){auditFotoEkle(audit.id,b.bahisId,b.ticketNo,b.aciklama,Array.from(inp.files));}};
       lbl.appendChild(inp);arac.appendChild(lbl);
       const dzb=document.createElement('button');dzb.type='button';dzb.className='ikincil kucuk';dzb.textContent='Duzenle';
       dzb.onclick=(e)=>{e.stopPropagation();duzenlenenBahis=audit.id+'|'+b.bahisId;auditCiz();};arac.appendChild(dzb);
@@ -1677,17 +1797,19 @@ function auditBahisBlogu(kutu,audit,fotolar){
       bo.appendChild(bbas);bo.appendChild(bgov);bl.appendChild(bo);});
     kutu.appendChild(bl);}
   // yeni hatali bahis ekleme (foto sart degil)
+  const yeni=document.createElement('div');yeni.className='yeni-bahis';
   const yuk=document.createElement('div');yuk.className='foto-yuk';
   const tik=document.createElement('input');tik.type='text';tik.className='foto-not';tik.placeholder='Ticket no (or. 30746)';tik.maxLength=40;tik.style.flex='0 1 150px';
   const not=document.createElement('input');not.type='text';not.className='foto-not';not.placeholder='Aciklama (or. 3500 odeyecegine 3000 odedi)';
-  const per=personelSelectEl('');
-  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.placeholder='Zarar (fazla +, eksik -)';zar.title='Fazla odeme icin arti, eksik odeme (sirket lehine) icin eksi girin';zar.step='0.01';zar.style.flex='0 1 120px';
-  const cez=document.createElement('input');cez.type='number';cez.className='foto-not';cez.placeholder='Ceza (saat)';cez.min='0';cez.step='0.5';cez.style.flex='0 1 120px';
-  const btn=document.createElement('button');btn.type='button';btn.textContent='+ Hatali bahis ekle';
-  btn.onclick=()=>{const t=tik.value.trim(),a=not.value.trim(),p=per.value,z=parseFloat(zar.value)||0,c=parseFloat(cez.value)||0;
+  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.placeholder='Zarar (fazla +, eksik -)';zar.title='Fazla odeme icin arti, eksik odeme (sirket lehine) icin eksi girin';zar.step='0.01';zar.style.flex='0 1 170px';
+  yuk.appendChild(tik);yuk.appendChild(not);yuk.appendChild(zar);
+  const kbas=document.createElement('div');kbas.className='mini-not';kbas.style.margin='6px 0 2px';kbas.textContent='Suclu personel(ler) - her birine ayri ceza, zarar tik ile secilir:';
+  const ked=kisilerEditor(null);
+  const btn=document.createElement('button');btn.type='button';btn.textContent='+ Hatali bahis ekle';btn.style.marginTop='6px';
+  btn.onclick=()=>{const t=tik.value.trim(),a=not.value.trim(),z=parseFloat(zar.value)||0,ks=ked._al();
     if(!t&&!a){$('aHata').textContent='Ticket no veya aciklama girin.';return;}
-    tik.value='';not.value='';per.value='';zar.value='';cez.value='';auditBahisYeni(audit.id,t,a,p,z,c);};
-  yuk.appendChild(tik);yuk.appendChild(not);yuk.appendChild(per);yuk.appendChild(zar);yuk.appendChild(cez);yuk.appendChild(btn);kutu.appendChild(yuk);
+    tik.value='';not.value='';zar.value='';auditBahisYeni(audit.id,t,a,z,ks);};
+  yeni.appendChild(yuk);yeni.appendChild(kbas);yeni.appendChild(ked);yeni.appendChild(btn);kutu.appendChild(yeni);
 }
 // Audit inline duzenleme formu (sube, tarih araligi, ticket araligi, denetleyenler)
 function auditDuzenleFormu(a){
@@ -1976,17 +2098,17 @@ async function raporCiz(){
         html+='<p class="mini-not" style="margin-top:10px"><b>Audit (hatali bahisler):</b></p>';
         list.forEach(a=>{
           const bahisler=auditBahisleri(a,fotoHarita[a.id]||[]);
-          bahisler.forEach(b=>{if(b.personel)perEkle(b.personel,'bahis',b.zarar,b.ceza);});
+          bahisler.forEach(b=>{(b.kisiler||[]).forEach(k=>{if(k.ad)perEkle(k.ad,'bahis',(k.zararli?b.zarar:0),k.ceza);});});
           html+='<div class="rapor-bahis"><b>'+uzunTarih(a.startDate)+' - '+uzunTarih(a.endDate)+'</b>'+
             ' &middot; Ticket: '+(a.ticketStart?esc(a.ticketStart):'?')+' - '+(a.ticketEnd?esc(a.ticketEnd):'?')+
             ' &middot; Denetleyen: '+esc(denetleyenAdi(a))+
             ' &middot; Hatali bahis: '+bahisler.length;
           bahisler.forEach(b=>{const resimler=b.fotolar.map(f=>f.dataUrl);
             const gi=window._rG.push(resimler)-1;
+            const kr=(b.kisiler||[]).map(k=>'<span class="personel-rozet">'+esc(k.ad)+(k.ceza?(' '+saat(k.ceza)):'')+(k.zararli?' &#9679;':'')+'</span>').join('');
             html+='<div class="rapor-bahis-ic"><span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span> '+esc(b.aciklama||'')+
-              (b.personel?'<span class="personel-rozet">'+esc(b.personel)+'</span>':'')+
-              tutarRozet(b.zarar)+(b.ceza?'<span class="ceza-rozet">'+saat(b.ceza)+'</span>':'')+
-              ((b.geriAlinan&&b.zarar&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':(b.geriAlinan?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+'<div class="foto-galeri">';
+              kr+tutarRozet(b.zarar)+
+              ((b.geriAlinan&&b.zarar>0&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':((b.zarar>0&&b.geriAlinan)?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+'<div class="foto-galeri">';
             b.fotolar.forEach((f,idx)=>{html+='<img class="foto-kucuk" src="'+f.dataUrl+'" alt="foto" onclick="lightboxAc(window._rG['+gi+'],'+idx+')">';});
             html+='</div></div>';});
           html+='</div>';
@@ -2048,8 +2170,10 @@ async function karneTopla(scope){
     {sube:subeAdi(k.branchId),baslik:x.label,aciklama:x.aciklama,fotolar:[]}); }); });
   // audit hatali bahisler (musteriden geri alinan da toplanir)
   audits.forEach(a=>{ const t=a.endDate||a.startDate||''; if(!uyar(t))return;
-    auditBahisleri(a,fotoHarita[a.id]||[]).forEach(b=>{ if(b.personel) ekle(b.personel,'bahis',t,b.zarar,b.ceza,
-      {sube:subeAdi(a.branchId),baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama,fotolar:b.fotolar.map(f=>f.dataUrl),odemeler:bahisOdemeler(b)},b.geriAlinan); }); });
+    auditBahisleri(a,fotoHarita[a.id]||[]).forEach(b=>{ (b.kisiler||[]).forEach(k=>{ if(!k.ad)return;
+      const kz=k.zararli?(Number(b.zarar)||0):0; const kg=k.zararli?(Number(b.geriAlinan)||0):0;
+      ekle(k.ad,'bahis',t,kz,k.ceza,
+        {sube:subeAdi(a.branchId),baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama,fotolar:b.fotolar.map(f=>f.dataUrl),odemeler:(k.zararli?bahisOdemeler(b):[])},kg); }); }); });
   // kamera / kasa
   kasalar.forEach(o=>{ const t=kameraTarihi(o)||o.date||''; if(!uyar(t))return; if(o.personel) ekle(o.personel,'kamera',t,o.zarar,o.ceza,
     {sube:subeAdi(o.branchId),baslik:(o.amount+' '+(YON_ETIKET[o.direction]||'')),aciklama:o.finding,fotolar:[]}); });
@@ -2139,9 +2263,9 @@ async function cezaKalemleriGetir(scope){
     list.push({tur:'denetim',kaynakAd:'Gunluk denetim',docId:k.id,key:x.key,tarih:k.date,sube:subeAdi(k.branchId),
       personel:x.personel||'',baslik:x.label,aciklama:x.aciklama||'',zarar:Number(x.zarar)||0,ceza:Number(x.ceza)||0}); }); });
   audits.forEach(a=>{ const t=a.endDate||a.startDate||''; if(!uyar(t))return;
-    auditBahisleri(a,fotoHarita[a.id]||[]).forEach(b=>{
-      list.push({tur:'bahis',kaynakAd:'Hatali bahis',docId:a.id,bahisId:b.bahisId,tarih:t,sube:subeAdi(a.branchId),
-        personel:b.personel||'',baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama||'',zarar:Number(b.zarar)||0,ceza:Number(b.ceza)||0}); }); });
+    auditBahisleri(a,fotoHarita[a.id]||[]).forEach(b=>{ (b.kisiler||[]).forEach(k=>{ if(!k.ad)return;
+      list.push({tur:'bahis',kaynakAd:'Hatali bahis',docId:a.id,bahisId:b.bahisId,kisiAd:k.ad,tarih:t,sube:subeAdi(a.branchId),
+        personel:k.ad,baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama||'',zarar:(k.zararli?(Number(b.zarar)||0):0),ceza:Number(k.ceza)||0}); }); }); });
   kasalar.forEach(o=>{ const t=kameraTarihi(o)||o.date||''; if(!uyar(t))return;
     list.push({tur:'kamera',kaynakAd:'Kamera',docId:o.id,tarih:t,sube:subeAdi(o.branchId),
       personel:o.personel||'',baslik:((o.amount||'')+' '+(YON_ETIKET[o.direction]||'')),aciklama:o.finding||'',zarar:Number(o.zarar)||0,ceza:Number(o.ceza)||0}); });
@@ -2158,7 +2282,13 @@ async function cezaYaz(kalem,val,btn){
       await db.collection('dailyAudits').doc(kalem.docId).update({['items.'+kalem.key+'.ceza']:v});
     } else if(kalem.tur==='bahis'){
       const ref=db.collection('audits').doc(kalem.docId);const snap=await ref.get();const data=snap.data()||{};
-      const bets=(Array.isArray(data.bets)?data.bets:[]).map(function(b){return (b&&b.bahisId===kalem.bahisId)?Object.assign({},b,{ceza:v}):b;});
+      const bets=(Array.isArray(data.bets)?data.bets:[]).map(function(b){
+        if(b&&b.bahisId===kalem.bahisId){
+          let ks=Array.isArray(b.kisiler)?b.kisiler.slice():(b.personel?[{ad:b.personel,ceza:Number(b.ceza)||0,zararli:true}]:[]);
+          let bulundu=false; ks=ks.map(function(k){if(k.ad===kalem.kisiAd){bulundu=true;return Object.assign({},k,{ceza:v});}return k;});
+          if(!bulundu) ks.push({ad:kalem.kisiAd,ceza:v,zararli:false});
+          return Object.assign({},b,{kisiler:ks});
+        } return b;});
       await ref.update({bets:bets});
     } else if(kalem.tur==='kamera'){
       await db.collection('cashEvents').doc(kalem.docId).update({ceza:v});
@@ -2439,6 +2569,8 @@ $('raporPdf').addEventListener('click',raporPdf);
 $('karnePdf').addEventListener('click',karnePdf);
 $('cezaAy').addEventListener('change',cezaCiz);
 $('cezaTum').addEventListener('change',cezaCiz);
+$('yedekBtn').addEventListener('click',yedekIndir);
+$('yedekYukleBtn').addEventListener('click',()=>{const f=$('yedekDosya').files;yedekYukle(f&&f[0]);});
 let baslatildi=false;
 auth.onAuthStateChanged(async(u)=>{
   if(!u){
