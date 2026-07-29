@@ -414,7 +414,7 @@ body.ceza-modu .ceza-btn{display:block!important}
         </div>
         <div class="form-satir">
           <div class="alan"><label>Eksigi / hatayi yapan personel (istege bagli)</label><select id="kPersonel"></select></div>
-          <div class="alan"><label>Personele yansiyan zarar (TL, istege bagli)</label><input id="kZarar" type="number" min="0" step="0.01" /></div>
+          <div class="alan"><label>Personele yansiyan zarar (fazla +, eksik -)</label><input id="kZarar" type="number" step="0.01" /></div>
           <div class="alan"><label>Ceza (saat, istege bagli)</label><input id="kCeza" type="number" min="0" step="0.5" /></div>
         </div>
         <label class="onay-satiri"><input id="kKamera" type="checkbox" /> Kamera incelendi</label>
@@ -674,6 +674,10 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','
 function tl(n){const s=Number(n)||0;try{return s.toLocaleString('tr-TR',{maximumFractionDigits:2})+' TL';}catch(e){return s+' TL';}}
 // Ceza saati bicimlendirme: 4 -> "4 saat ceza"
 function saat(n){const s=Number(n)||0;return s+' saat';}
+// Tutar rozeti: pozitif=zarar (kirmizi), negatif=kar/eksik odeme (yesil). 0 -> bos.
+function tutarRozet(n){n=Number(n)||0; if(n<0) return '<span class="geri-rozet">kar: '+tl(-n)+'</span>'; if(n>0) return '<span class="zarar-rozet">'+tl(n)+'</span>'; return '';}
+// Bir tutari isaretine gore renkli metin (tablo hucreleri icin): negatif yesil, pozitif kirmizi.
+function tutarSinif(n){return (Number(n)||0)<0?'karne-geri':'karne-zarar';}
 // Verilen tarihin haftasinin Pazartesi'sini YYYY-AA-GG dondurur
 function haftaBasi(dateStr){
   const d=new Date(dateStr+'T00:00:00');
@@ -806,7 +810,7 @@ async function panoCiz(){
     if(!liste.length){ pe.innerHTML='<p class="bos-satir">Bu ay personele bagli hata yok.</p>'; }
     else{ let h='<ul class="rapor-liste rapor-personel">';
       liste.forEach(p=>{h+='<li><span><b>'+esc(p.ad)+'</b> <span class="mini-not">('+p.toplam+' hata)</span></span><span>'+
-        (p.zarar?'<span class="zarar-rozet">'+tl(p.zarar)+'</span>':'')+(p.ceza?'<span class="ceza-rozet">'+saat(p.ceza)+'</span>':'')+'</span></li>';});
+        tutarRozet(p.zarar)+(p.ceza?'<span class="ceza-rozet">'+saat(p.ceza)+'</span>':'')+'</span></li>';});
       h+='</ul>'; pe.innerHTML=h; }
   }catch(err){console.error(err);$('panoPersonel').innerHTML='<p class="bos-satir">Personel ozeti yuklenemedi.</p>';}
   // Rota panosu (bu hafta) - gorev ve kamera atamalari ilgili gun hucresinde EXTRA gosterilir
@@ -1083,7 +1087,7 @@ function denetimMaddeSatiri(md,mevcut,grup){
   const yanlisAlan=document.createElement('div');yanlisAlan.className='md-yanlis-alan';
   const ack=document.createElement('input');ack.type='text';ack.className='foto-not md-ack';ack.placeholder='Ne yanlis yapildi? (aciklama)';ack.maxLength=200;
   const per=personelSelectEl('');
-  const zar=document.createElement('input');zar.type='number';zar.className='foto-not md-zarar';zar.placeholder='Zarar (TL)';zar.min='0';zar.step='0.01';zar.style.flex='0 1 120px';
+  const zar=document.createElement('input');zar.type='number';zar.className='foto-not md-zarar';zar.placeholder='Zarar (fazla +, eksik -)';zar.title='Fazla odeme icin arti, eksik odeme (sirket lehine) icin eksi girin';zar.step='0.01';zar.style.flex='0 1 120px';
   const cez=document.createElement('input');cez.type='number';cez.className='foto-not md-ceza';cez.placeholder='Ceza (saat)';cez.min='0';cez.step='0.5';cez.style.flex='0 1 120px';
   yanlisAlan.appendChild(ack);yanlisAlan.appendChild(per);yanlisAlan.appendChild(zar);yanlisAlan.appendChild(cez);
   rdi.onchange=()=>{row.classList.remove('acik-yanlis');};
@@ -1205,7 +1209,7 @@ async function denetimCiz(){
         detay='<div class="kayit-detay rapor-yanlis"><b>'+yanlis.length+' hata:</b></div><ul class="rapor-liste" style="margin:4px 0">';
         yanlis.forEach(x=>{detay+='<li><b>'+esc(x.label)+'</b>'+(x.aciklama?' - '+esc(x.aciklama):'')+
           (x.personel?'<span class="personel-rozet">'+esc(x.personel)+'</span>':'')+
-          (x.zarar?' <span class="zarar-rozet">'+tl(x.zarar)+'</span>':'')+
+          (x.zarar?(' '+tutarRozet(x.zarar)):'')+
           (x.ceza?' <span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+'</li>';});
         detay+='</ul>';
       } else {
@@ -1566,7 +1570,7 @@ function bahisDuzenleFormu(auditId,b){
   const t=document.createElement('input');t.type='text';t.className='foto-not';t.value=b.ticketNo||'';t.placeholder='Ticket no';t.maxLength=40;t.style.flex='0 1 150px';
   const n=document.createElement('input');n.type='text';n.className='foto-not';n.value=b.aciklama||'';n.placeholder='Aciklama';
   const per=personelSelectEl(b.personel||'');
-  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.value=(b.zarar?b.zarar:'');zar.placeholder='Zarar (TL)';zar.min='0';zar.step='0.01';zar.style.flex='0 1 120px';
+  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.value=(b.zarar?b.zarar:'');zar.placeholder='Zarar (fazla +, eksik -)';zar.title='Fazla odeme icin arti, eksik odeme (sirket lehine) icin eksi girin';zar.step='0.01';zar.style.flex='0 1 120px';
   const cez=document.createElement('input');cez.type='number';cez.className='foto-not';cez.value=(b.ceza?b.ceza:'');cez.placeholder='Ceza (saat)';cez.min='0';cez.step='0.5';cez.style.flex='0 1 120px';
   yuk.appendChild(t);yuk.appendChild(n);yuk.appendChild(per);yuk.appendChild(zar);yuk.appendChild(cez);
   const not2=document.createElement('div');not2.className='mini-not';not2.textContent='Musteri odemeleri asagidaki "geri alim" bolumunden eklenir.';
@@ -1624,14 +1628,15 @@ function auditBahisBlogu(kutu,audit,fotolar){
         '<span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span>'+
         '<span class="bahis-ack">'+esc(b.aciklama||'')+'</span>'+
         (b.personel?'<span class="personel-rozet">'+esc(b.personel)+'</span>':'')+
-        (b.zarar?'<span class="zarar-rozet">'+tl(b.zarar)+'</span>':'')+
+        tutarRozet(b.zarar)+
         (b.ceza?'<span class="ceza-rozet">'+saat(b.ceza)+'</span>':'')+
-        ((b.geriAlinan&&b.zarar&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':(b.geriAlinan?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+
+        ((b.zarar>0&&b.geriAlinan&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':((b.zarar>0&&b.geriAlinan)?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+
         '<span class="bahis-say">'+resimler.length+' resim</span>';
       const bgov=document.createElement('div');bgov.className='bahis-govde';
       b.fotolar.forEach((f,idx)=>{const im=document.createElement('img');im.src=f.dataUrl;im.className='foto-kucuk';im.alt='hatali odeme';
         im.onclick=(e)=>{e.stopPropagation();lightboxAc(resimler,idx);};bgov.appendChild(im);});
-      // ---- Musteriden geri alim (taksitli odemeler) ----
+      // ---- Musteriden geri alim: sadece FAZLA odemede (zarar>0). Eksik odeme (kar) -> geri alim yok. ----
+      if((Number(b.zarar)||0)>0){
       const galma=document.createElement('div');galma.className='geri-alma';
       const odemeler=bahisOdemeler(b);
       const odenen=odemeler.reduce((s,o)=>s+(Number(o.tutar)||0),0);
@@ -1653,6 +1658,11 @@ function auditBahisBlogu(kutu,audit,fotolar){
       eb.onclick=(e)=>{e.stopPropagation();const t=parseFloat(ti.value)||0;if(t<=0){$('aHata').textContent='Odenen tutar girin.';return;}bahisOdemeEkle(audit.id,b.bahisId,t,di.value);};
       ekleF.appendChild(ti);ekleF.appendChild(di);ekleF.appendChild(eb);galma.appendChild(ekleF);
       bgov.appendChild(galma);
+      } else if((Number(b.zarar)||0)<0){
+        const gk=document.createElement('div');gk.className='geri-alma';gk.style.borderColor='var(--yesil)';
+        gk.innerHTML='<div class="cb-ust"><b>Eksik odeme</b> &middot; sirket lehine (kar): <b class="karne-geri">'+tl(-b.zarar)+'</b> &middot; musteriden geri alim yok.</div>';
+        bgov.appendChild(gk);
+      }
       const arac=document.createElement('div');arac.className='bahis-arac';
       const lbl=document.createElement('label');lbl.className='ikincil kucuk foto-btn';lbl.textContent='+ Foto cek / ekle';
       const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.style.display='none';inp.setAttribute('capture','environment');
@@ -1671,7 +1681,7 @@ function auditBahisBlogu(kutu,audit,fotolar){
   const tik=document.createElement('input');tik.type='text';tik.className='foto-not';tik.placeholder='Ticket no (or. 30746)';tik.maxLength=40;tik.style.flex='0 1 150px';
   const not=document.createElement('input');not.type='text';not.className='foto-not';not.placeholder='Aciklama (or. 3500 odeyecegine 3000 odedi)';
   const per=personelSelectEl('');
-  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.placeholder='Zarar (TL)';zar.min='0';zar.step='0.01';zar.style.flex='0 1 120px';
+  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.placeholder='Zarar (fazla +, eksik -)';zar.title='Fazla odeme icin arti, eksik odeme (sirket lehine) icin eksi girin';zar.step='0.01';zar.style.flex='0 1 120px';
   const cez=document.createElement('input');cez.type='number';cez.className='foto-not';cez.placeholder='Ceza (saat)';cez.min='0';cez.step='0.5';cez.style.flex='0 1 120px';
   const btn=document.createElement('button');btn.type='button';btn.textContent='+ Hatali bahis ekle';
   btn.onclick=()=>{const t=tik.value.trim(),a=not.value.trim(),p=per.value,z=parseFloat(zar.value)||0,c=parseFloat(cez.value)||0;
@@ -1952,7 +1962,7 @@ async function raporCiz(){
             html+=' <span class="rapor-yanlis">('+yy.length+' hata tespit edildi)</span><ul class="rapor-liste" style="margin:4px 0 4px 12px">';
             yy.forEach(x=>{html+='<li><b>'+esc(x.label)+'</b>'+(x.aciklama?' - '+esc(x.aciklama):'')+
               (x.personel?'<span class="personel-rozet">'+esc(x.personel)+'</span>':'')+
-              (x.zarar?'<span class="zarar-rozet">'+tl(x.zarar)+'</span>':'')+(x.ceza?'<span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+'</li>';});
+              tutarRozet(x.zarar)+(x.ceza?'<span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+'</li>';});
             html+='</ul>';
           }
           html+='</li>';
@@ -1975,7 +1985,7 @@ async function raporCiz(){
             const gi=window._rG.push(resimler)-1;
             html+='<div class="rapor-bahis-ic"><span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span> '+esc(b.aciklama||'')+
               (b.personel?'<span class="personel-rozet">'+esc(b.personel)+'</span>':'')+
-              (b.zarar?'<span class="zarar-rozet">'+tl(b.zarar)+'</span>':'')+(b.ceza?'<span class="ceza-rozet">'+saat(b.ceza)+'</span>':'')+
+              tutarRozet(b.zarar)+(b.ceza?'<span class="ceza-rozet">'+saat(b.ceza)+'</span>':'')+
               ((b.geriAlinan&&b.zarar&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':(b.geriAlinan?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+'<div class="foto-galeri">';
             b.fotolar.forEach((f,idx)=>{html+='<img class="foto-kucuk" src="'+f.dataUrl+'" alt="foto" onclick="lightboxAc(window._rG['+gi+'],'+idx+')">';});
             html+='</div></div>';});
@@ -1991,7 +2001,7 @@ async function raporCiz(){
           html+='<li><span class="rapor-tarih">'+(kameraTarihi(o)?uzunTarih(kameraTarihi(o)):'-')+'</span> '+
             esc(o.amount)+' '+(YON_ETIKET[o.direction]||'')+' - <b>'+durumK+'</b>'+bulguK+
             (o.personel?'<span class="personel-rozet">'+esc(o.personel)+'</span>':'')+
-            (o.zarar?'<span class="zarar-rozet">'+tl(o.zarar)+'</span>':'')+(o.ceza?'<span class="ceza-rozet">'+saat(o.ceza)+'</span>':'')+
+            tutarRozet(o.zarar)+(o.ceza?'<span class="ceza-rozet">'+saat(o.ceza)+'</span>':'')+
             ' <span class="mini-not">(inceleyen: '+esc(atananAdlari(o))+')</span></li>';});
         html+='</ul>';
       }
@@ -2006,7 +2016,7 @@ async function raporCiz(){
       ustHtml+='<div class="pano-kart"><h3 style="margin-top:0">Personel Hata Ozeti (bu ay) &mdash; toplam zarar '+tl(ayZarar)+', toplam ceza '+saat(ayCeza)+'</h3><ul class="rapor-liste rapor-personel">';
       perListe.forEach(p=>{const parca=[];if(p.denetim)parca.push(p.denetim+' gunluk denetim');if(p.bahis)parca.push(p.bahis+' hatali bahis');if(p.kamera)parca.push(p.kamera+' kamera');
         ustHtml+='<li><span><b>'+esc(p.ad)+'</b> <span class="mini-not">('+parca.join(', ')+')</span></span><span>'+
-          (p.zarar?'<span class="zarar-rozet">'+tl(p.zarar)+'</span>':'')+(p.ceza?'<span class="ceza-rozet">'+saat(p.ceza)+'</span>':'')+'<span class="personel-rozet">'+p.toplam+' hata</span></span></li>';});
+          tutarRozet(p.zarar)+(p.ceza?'<span class="ceza-rozet">'+saat(p.ceza)+'</span>':'')+'<span class="personel-rozet">'+p.toplam+' hata</span></span></li>';});
       ustHtml+='</ul></div>';
     }
     el.innerHTML=ustHtml+html;
@@ -2064,21 +2074,21 @@ async function karneCiz(){
     const toplamZarar=liste.reduce((s,p)=>s+p.zarar,0);
     const toplamCeza=liste.reduce((s,p)=>s+p.ceza,0);
     const toplamGeri=liste.reduce((s,p)=>s+(p.geriAlinan||0),0);
-    const toplamNet=Math.max(0,toplamZarar-toplamGeri);
-    let h='<p class="mini-not">'+donem+' &mdash; '+liste.length+' personel, '+toplamHata+' hata &middot; zarar <b>'+tl(toplamZarar)+'</b> &middot; geri alinan <b>'+tl(toplamGeri)+'</b> &middot; net kalan <b>'+tl(toplamNet)+'</b> &middot; ceza <b>'+saat(toplamCeza)+'</b></p>';
-    h+='<p class="mini-not">Personelin uzerine tikla: tum hatalari acilir. Bir hataya tikla: aciklama ve resimler acilir. (Geri alinan = musteriden geri alinan tutar)</p>';
+    const toplamNet=toplamZarar-toplamGeri;
+    let h='<p class="mini-not">'+donem+' &mdash; '+liste.length+' personel, '+toplamHata+' hata &middot; zarar <b class="'+tutarSinif(toplamZarar)+'">'+tl(toplamZarar)+'</b> &middot; geri alinan <b>'+tl(toplamGeri)+'</b> &middot; net <b class="'+tutarSinif(toplamNet)+'">'+tl(toplamNet)+'</b>'+(toplamNet<0?' (KAR)':'')+' &middot; ceza <b>'+saat(toplamCeza)+'</b></p>';
+    h+='<p class="mini-not">Personelin uzerine tikla: tum hatalari acilir. Bir hataya tikla: aciklama ve resimler acilir. Fazla odeme (+) zarar, eksik odeme (-) sirket lehine (kar); net eksi ise sirket kara gecmis demektir.</p>';
     h+='<div class="pano-kart" style="overflow-x:auto"><table class="karne-tablo"><thead><tr>'+
       '<th>Personel</th><th class="sag">Toplam hata</th><th class="sag">Toplam zarar</th><th class="sag">Geri alinan</th><th class="sag">Net kalan</th><th class="sag">Toplam ceza</th>'+
       '<th class="sag">Gunluk denetim</th><th class="sag">Hatali bahis</th><th class="sag">Kamera</th><th class="sag">Son hata</th></tr></thead><tbody>';
     window._kG=[];   // karne foto gruplari (lightbox icin)
     liste.forEach(p=>{
       const kir=(o)=>{ if(!o.say)return '-'; const ek=[]; if(o.zarar)ek.push(tl(o.zarar)); if(o.ceza)ek.push(saat(o.ceza)); return o.say+(ek.length?(' ('+ek.join(', ')+')'):''); };
-      const net=Math.max(0,p.zarar-(p.geriAlinan||0));
+      const net=p.zarar-(p.geriAlinan||0);
       h+='<tr class="karne-ana" onclick="karneSatirAc(this)"><td><span class="karne-ok">&#9654;</span> <b>'+esc(p.ad)+'</b></td>'+
         '<td class="sag">'+p.toplam+'</td>'+
-        '<td class="sag karne-zarar">'+tl(p.zarar)+'</td>'+
+        '<td class="sag '+tutarSinif(p.zarar)+'">'+tl(p.zarar)+'</td>'+
         '<td class="sag karne-geri">'+tl(p.geriAlinan||0)+'</td>'+
-        '<td class="sag karne-zarar">'+tl(net)+'</td>'+
+        '<td class="sag '+tutarSinif(net)+'">'+tl(net)+'</td>'+
         '<td class="sag karne-ceza">'+saat(p.ceza)+'</td>'+
         '<td class="sag">'+kir(p.denetim)+'</td>'+
         '<td class="sag">'+kir(p.bahis)+'</td>'+
@@ -2093,8 +2103,8 @@ async function karneCiz(){
             '<span class="hata-kaynak">'+esc(x.kaynakAd)+'</span>'+
             '<span class="rapor-tarih">'+(x.tarih?uzunTarih(x.tarih):'-')+'</span>'+
             '<span class="hata-baslik">'+esc(x.sube)+(x.baslik?(' - '+esc(x.baslik)):'')+'</span>'+
-            (x.zarar?'<span class="zarar-rozet">'+tl(x.zarar)+'</span>':'')+(x.ceza?'<span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+
-            ((x.geriAlinan&&x.zarar&&x.geriAlinan>=x.zarar)?'<span class="geri-rozet">geri alindi</span>':(x.geriAlinan?'<span class="geri-rozet">geri: '+tl(x.geriAlinan)+'</span>':''))+
+            tutarRozet(x.zarar)+(x.ceza?'<span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+
+            ((x.zarar>0&&x.geriAlinan&&x.geriAlinan>=x.zarar)?'<span class="geri-rozet">geri alindi</span>':((x.zarar>0&&x.geriAlinan)?'<span class="geri-rozet">geri: '+tl(x.geriAlinan)+'</span>':''))+
             (resimler.length?'<span class="bahis-say">'+resimler.length+' resim</span>':'')+'</div>'+
             '<div class="hata-govde">'+
               (x.aciklama?'<p style="margin:6px 0">'+esc(x.aciklama)+'</p>':'<p class="mini-not" style="margin:6px 0">Aciklama girilmemis.</p>')+
@@ -2108,7 +2118,7 @@ async function karneCiz(){
       }
       h+='</td></tr>';
     });
-    h+='<tr class="karne-toplam"><td>TOPLAM</td><td class="sag">'+toplamHata+'</td><td class="sag karne-zarar">'+tl(toplamZarar)+'</td><td class="sag karne-geri">'+tl(toplamGeri)+'</td><td class="sag karne-zarar">'+tl(toplamNet)+'</td><td class="sag karne-ceza">'+saat(toplamCeza)+'</td>'+
+    h+='<tr class="karne-toplam"><td>TOPLAM</td><td class="sag">'+toplamHata+'</td><td class="sag '+tutarSinif(toplamZarar)+'">'+tl(toplamZarar)+'</td><td class="sag karne-geri">'+tl(toplamGeri)+'</td><td class="sag '+tutarSinif(toplamNet)+'">'+tl(toplamNet)+'</td><td class="sag karne-ceza">'+saat(toplamCeza)+'</td>'+
       '<td class="sag"></td><td class="sag"></td><td class="sag"></td><td class="sag"></td></tr>';
     h+='</tbody></table></div>';
     el.innerHTML=h;
@@ -2175,7 +2185,7 @@ async function cezaCiz(){
       bilgi.innerHTML='<div class="cb-ust"><span class="ceza-kaynak">'+esc(k.kaynakAd)+'</span>'+
         (k.tarih?uzunTarih(k.tarih):'')+' &middot; '+esc(k.sube)+' &middot; '+esc(k.baslik)+
         (k.personel?'<span class="personel-rozet">'+esc(k.personel)+'</span>':' <span class="mini-not">(personel secilmemis)</span>')+
-        (k.zarar?'<span class="zarar-rozet">'+tl(k.zarar)+'</span>':'')+'</div>'+
+        tutarRozet(k.zarar)+'</div>'+
         (k.aciklama?'<div class="mini-not">'+esc(k.aciklama)+'</div>':'');
       const giris=document.createElement('div');giris.className='ceza-giris';
       const inp=document.createElement('input');inp.type='number';inp.min='0';inp.step='0.5';inp.placeholder='saat';if(k.ceza)inp.value=k.ceza;
@@ -2321,7 +2331,7 @@ function kasaDuzenleFormu(id,o){
   s1.appendChild(tut);s1.appendChild(yon);
   const s2=document.createElement('div');s2.className='foto-yuk';
   const per=personelSelectEl(o.personel||'');
-  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.value=(o.zarar?o.zarar:'');zar.placeholder='Zarar (TL)';zar.min='0';zar.step='0.01';zar.style.flex='0 1 120px';
+  const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.value=(o.zarar?o.zarar:'');zar.placeholder='Zarar (fazla +, eksik -)';zar.title='Fazla odeme icin arti, eksik odeme (sirket lehine) icin eksi girin';zar.step='0.01';zar.style.flex='0 1 120px';
   const cez=document.createElement('input');cez.type='number';cez.className='foto-not';cez.value=(o.ceza?o.ceza:'');cez.placeholder='Ceza (saat)';cez.min='0';cez.step='0.5';cez.style.flex='0 1 120px';
   s2.appendChild(per);s2.appendChild(zar);s2.appendChild(cez);
   const s3=document.createElement('div');s3.className='foto-yuk';
