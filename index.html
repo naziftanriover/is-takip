@@ -243,6 +243,15 @@ body.salt-okunur #rKaydet, body.salt-okunur #rOnceki, body.salt-okunur #rSonraki
 body.salt-okunur #sKur, body.salt-okunur #sAdmin{display:none!important}
 body.salt-okunur .rota-tablo select{pointer-events:none}
 body.salt-okunur #kullaniciAdi{font-weight:700}
+/* Ceza (bolge muduru) modu: Ceza sekmesi sadece bu modda gorunur; ceza panel kontrolleri salt-okunur'dan etkilenmez */
+.ceza-btn{display:none!important}
+body.ceza-modu .ceza-btn{display:block!important}
+.ceza-satir{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--renk-cizgi);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fff}
+.ceza-bilgi{flex:1 1 260px;min-width:200px}
+.ceza-bilgi .cb-ust{font-weight:600}
+.ceza-giris{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.ceza-giris input{width:110px;padding:7px 8px;font-size:14px}
+.ceza-kaynak{display:inline-block;font-size:11px;font-weight:700;border-radius:10px;padding:1px 8px;margin-right:6px;background:var(--renk-tint);color:var(--renk-ana-koyu)}
 .rapor-liste{list-style:none;padding:0;margin:6px 0;display:grid;gap:10px}
 .rapor-liste li{border-bottom:1px solid var(--renk-cizgi);padding-bottom:8px;font-size:14px}
 .rapor-liste li:last-child{border-bottom:none;padding-bottom:0}
@@ -292,6 +301,7 @@ body.salt-okunur #kullaniciAdi{font-weight:700}
     <button class="sekme-btn" data-hedef="sekme-rota" type="button">Rota</button>
     <button class="sekme-btn" data-hedef="sekme-rapor" type="button">Aylik Rapor</button>
     <button class="sekme-btn" data-hedef="sekme-karne" type="button">Personel Karnesi</button>
+    <button class="sekme-btn ceza-btn" data-hedef="sekme-ceza" type="button">Ceza</button>
     <button class="sekme-btn" data-hedef="sekme-log" type="button">Denetim Izi</button>
     <button class="sekme-btn" data-hedef="sekme-subeler" type="button">Subeler</button>
   </nav>
@@ -459,6 +469,20 @@ body.salt-okunur #kullaniciAdi{font-weight:700}
       <div id="karneIcerik"><p class="bos-satir">Yukleniyor...</p></div>
     </section>
 
+    <!-- CEZA (BOLGE MUDURU) -->
+    <section id="sekme-ceza" class="sekme-bolum gizli">
+      <h2>Ceza Girisi (Bolge Muduru)</h2>
+      <p class="alt-baslik">Guvenlik ekibinin girdigi hatalara ceza saati yazin. Sadece ceza alani kaydedilir.</p>
+      <div class="kart-form">
+        <div class="form-satir">
+          <div class="alan"><label>Donem</label><input id="cezaAy" type="month" /></div>
+          <div class="alan"><label class="onay-satiri" style="margin-top:26px"><input id="cezaTum" type="checkbox" /> Tum zamanlar</label></div>
+        </div>
+      </div>
+      <p id="cezaHata" class="hata-mesaji"></p>
+      <div id="cezaIcerik"><p class="bos-satir">Yukleniyor...</p></div>
+    </section>
+
     <!-- DENETIM IZI -->
     <section id="sekme-log" class="sekme-bolum gizli">
       <h2>Denetim Izi (kim ne yapti)</h2>
@@ -568,6 +592,9 @@ function yoneticiMi(){return !!(durum.profil&&durum.profil.role==='admin');}
 // Genel Mudur (salt-okunur) e-postalari. Bu hesaplar sadece izler; veri girme/duzenleme/silme kapali.
 const YONETICI_EMAILLER=['levent@solibet.com'];
 function saltOkunurMu(){const u=auth.currentUser;return !!(u&&u.email&&YONETICI_EMAILLER.indexOf(u.email.toLowerCase())>=0);}
+// Bolge muduru (sadece ceza girebilir): gorev/audit/kamera EKLEYEMEZ, sadece hatalara ceza saati yazar.
+const CEZA_EMAILLER=['durmus@solibet.com'];
+function cezaModuMu(){const u=auth.currentUser;return !!(u&&u.email&&CEZA_EMAILLER.indexOf(u.email.toLowerCase())>=0);}
 function subeAdi(id){const s=durum.subeler.find(x=>x.id===id);return s?s.name:'(bilinmeyen sube)';}
 function kisiAdi(id){ if(typeof id==='string'&&id.indexOf('ad:')===0) return id.slice(3);
   const k=durum.kullanicilar.find(x=>x.id===id);return k?k.name:'atanmamis';}
@@ -720,6 +747,7 @@ function sekmeleriKur(){
     if(b.dataset.hedef==='sekme-rota') rotaYukle();
     if(b.dataset.hedef==='sekme-rapor') raporCiz();
     if(b.dataset.hedef==='sekme-karne') karneCiz();
+    if(b.dataset.hedef==='sekme-ceza') cezaCiz();
   }));
 }
 
@@ -1997,6 +2025,79 @@ async function karneCiz(){
     el.innerHTML=h;
   }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Karne yuklenemedi.</p>';}
 }
+// ================== CEZA GIRISI (BOLGE MUDURU) ==================
+// Tum hatalari (gunluk denetim yanlislari + hatali bahisler + kamera) kaynak referansiyla toplar.
+async function cezaKalemleriGetir(scope){
+  const [audits,fotoHarita,kasaSnap,denetimSnap]=await Promise.all([
+    auditleriGetir(), auditFotoHaritasi(),
+    db.collection('cashEvents').get(), db.collection('dailyAudits').get()
+  ]);
+  const kasalar=kasaSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const denetimler=denetimSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const uyar=t=>scope.tum||(!!t&&String(t).slice(0,7)===scope.ay);
+  const list=[];
+  denetimler.forEach(k=>{ if(!uyar(k.date))return; denetimYanlislar(k).forEach(x=>{
+    list.push({tur:'denetim',kaynakAd:'Gunluk denetim',docId:k.id,key:x.key,tarih:k.date,sube:subeAdi(k.branchId),
+      personel:x.personel||'',baslik:x.label,aciklama:x.aciklama||'',zarar:Number(x.zarar)||0,ceza:Number(x.ceza)||0}); }); });
+  audits.forEach(a=>{ const t=a.endDate||a.startDate||''; if(!uyar(t))return;
+    auditBahisleri(a,fotoHarita[a.id]||[]).forEach(b=>{
+      list.push({tur:'bahis',kaynakAd:'Hatali bahis',docId:a.id,bahisId:b.bahisId,tarih:t,sube:subeAdi(a.branchId),
+        personel:b.personel||'',baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama||'',zarar:Number(b.zarar)||0,ceza:Number(b.ceza)||0}); }); });
+  kasalar.forEach(o=>{ const t=kameraTarihi(o)||o.date||''; if(!uyar(t))return;
+    list.push({tur:'kamera',kaynakAd:'Kamera',docId:o.id,tarih:t,sube:subeAdi(o.branchId),
+      personel:o.personel||'',baslik:((o.amount||'')+' '+(YON_ETIKET[o.direction]||'')),aciklama:o.finding||'',zarar:Number(o.zarar)||0,ceza:Number(o.ceza)||0}); });
+  list.sort((a,b)=>String(b.tarih).localeCompare(String(a.tarih)));
+  return list;
+}
+// Sadece ceza saatini ilgili kayda yazar (baska alana dokunmaz).
+async function cezaYaz(kalem,val,btn){
+  const h=$('cezaHata');h.textContent='';h.style.color='';
+  const v=parseFloat(val)||0;
+  if(btn)btn.disabled=true;
+  try{
+    if(kalem.tur==='denetim'){
+      await db.collection('dailyAudits').doc(kalem.docId).update({['items.'+kalem.key+'.ceza']:v});
+    } else if(kalem.tur==='bahis'){
+      const ref=db.collection('audits').doc(kalem.docId);const snap=await ref.get();const data=snap.data()||{};
+      const bets=(Array.isArray(data.bets)?data.bets:[]).map(function(b){return (b&&b.bahisId===kalem.bahisId)?Object.assign({},b,{ceza:v}):b;});
+      await ref.update({bets:bets});
+    } else if(kalem.tur==='kamera'){
+      await db.collection('cashEvents').doc(kalem.docId).update({ceza:v});
+    }
+    await logYaz('guncelleme','Ceza',kalem.docId,(kalem.personel||kalem.sube||'')+' '+saat(v));
+    h.style.color='var(--yesil)';h.textContent=(kalem.personel||kalem.sube)+' icin ceza kaydedildi: '+saat(v)+'.';
+    setTimeout(function(){h.style.color='';h.textContent='';},3000);
+  }catch(err){console.error(err);h.textContent='Kaydedilemedi. Tekrar deneyin.';}
+  finally{ if(btn)btn.disabled=false; }
+}
+async function cezaCiz(){
+  const el=$('cezaIcerik');
+  if(!$('cezaAy').value) $('cezaAy').value=ayBugun();
+  const scope={tum:$('cezaTum').checked,ay:$('cezaAy').value};
+  el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
+  try{
+    const list=await cezaKalemleriGetir(scope);
+    const donem=scope.tum?'Tum zamanlar':('Ay: '+esc(scope.ay));
+    if(!list.length){ el.innerHTML='<p class="mini-not">'+donem+'</p><p class="bos-satir">Bu donemde ceza yazilacak hata yok.</p>'; return; }
+    el.innerHTML='<p class="mini-not">'+donem+' &mdash; '+list.length+' hata</p>';
+    list.forEach(function(k){
+      const row=document.createElement('div');row.className='ceza-satir';
+      const bilgi=document.createElement('div');bilgi.className='ceza-bilgi';
+      bilgi.innerHTML='<div class="cb-ust"><span class="ceza-kaynak">'+esc(k.kaynakAd)+'</span>'+
+        (k.tarih?uzunTarih(k.tarih):'')+' &middot; '+esc(k.sube)+' &middot; '+esc(k.baslik)+
+        (k.personel?'<span class="personel-rozet">'+esc(k.personel)+'</span>':' <span class="mini-not">(personel secilmemis)</span>')+
+        (k.zarar?'<span class="zarar-rozet">'+tl(k.zarar)+'</span>':'')+'</div>'+
+        (k.aciklama?'<div class="mini-not">'+esc(k.aciklama)+'</div>':'');
+      const giris=document.createElement('div');giris.className='ceza-giris';
+      const inp=document.createElement('input');inp.type='number';inp.min='0';inp.step='0.5';inp.placeholder='saat';if(k.ceza)inp.value=k.ceza;
+      const lbl=document.createElement('span');lbl.className='mini-not';lbl.textContent='saat';
+      const btn=document.createElement('button');btn.type='button';btn.className='kucuk';btn.textContent='Kaydet';
+      btn.onclick=function(){cezaYaz(k,inp.value,btn);};
+      giris.appendChild(inp);giris.appendChild(lbl);giris.appendChild(btn);
+      row.appendChild(bilgi);row.appendChild(giris);el.appendChild(row);
+    });
+  }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Yuklenemedi.</p>';}
+}
 // ================== PROFESYONEL PDF / YAZDIRMA ==================
 // Ayri bir pencerede profesyonel duzenli cikti olusturur; tarayicidan "PDF olarak kaydet" secilebilir.
 function yaziciStil(genis){
@@ -2237,6 +2338,8 @@ $('karneTum').addEventListener('change',karneCiz);
 $('rPdf').addEventListener('click',rotaPdf);
 $('raporPdf').addEventListener('click',raporPdf);
 $('karnePdf').addEventListener('click',karnePdf);
+$('cezaAy').addEventListener('change',cezaCiz);
+$('cezaTum').addEventListener('change',cezaCiz);
 let baslatildi=false;
 auth.onAuthStateChanged(async(u)=>{
   if(!u){
@@ -2250,9 +2353,10 @@ auth.onAuthStateChanged(async(u)=>{
   try{
     durum.uid=u.uid;
     durum.profil=await profiliHazirla(u);
-    const gm=saltOkunurMu();
-    document.body.classList.toggle('salt-okunur',gm);
-    $('kullaniciAdi').textContent=buyukAd(adim())+(gm?' (Genel Mudur - salt okunur)':'');
+    const gm=saltOkunurMu();const cz=cezaModuMu();
+    document.body.classList.toggle('salt-okunur',gm||cz);
+    document.body.classList.toggle('ceza-modu',cz);
+    $('kullaniciAdi').textContent=buyukAd(adim())+(gm?' (Genel Mudur - salt okunur)':(cz?' (Bolge Muduru - sadece ceza)':''));
     await subeleriYukle();
     await kullanicilariYukle();
     if(!baslatildi){ sekmeleriKur(); baslatildi=true; }
