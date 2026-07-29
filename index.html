@@ -2129,18 +2129,8 @@ async function raporCiz(){
       }
       html+='</div>';
     });
-    // ---- PERSONEL HATA OZETI (en cok hata yapan) ----
-    let ustHtml='<p class="mini-not">Ay: '+esc(ay)+' &mdash; sube bazinda denetimler, kamera ve personel hatalari</p>';
-    const perListe=Object.keys(perSay).map(ad=>({ad:ad,...perSay[ad]})).sort((a,b)=>b.zarar-a.zarar||b.toplam-a.toplam||a.ad.localeCompare(b.ad,'tr'));
-    if(perListe.length){
-      const ayZarar=perListe.reduce((s,p)=>s+p.zarar,0);
-      const ayCeza=perListe.reduce((s,p)=>s+p.ceza,0);
-      ustHtml+='<div class="pano-kart"><h3 style="margin-top:0">Personel Hata Ozeti (bu ay) &mdash; toplam zarar '+tl(ayZarar)+', toplam ceza '+saat(ayCeza)+'</h3><ul class="rapor-liste rapor-personel">';
-      perListe.forEach(p=>{const parca=[];if(p.denetim)parca.push(p.denetim+' gunluk denetim');if(p.bahis)parca.push(p.bahis+' hatali bahis');if(p.kamera)parca.push(p.kamera+' kamera');
-        ustHtml+='<li><span><b>'+esc(p.ad)+'</b> <span class="mini-not">('+parca.join(', ')+')</span></span><span>'+
-          tutarRozet(p.zarar)+(p.ceza?'<span class="ceza-rozet">'+saat(p.ceza)+'</span>':'')+'<span class="personel-rozet">'+p.toplam+' hata</span></span></li>';});
-      ustHtml+='</ul></div>';
-    }
+    // NOT: Personel Hata Ozeti kaldirildi (ayni bilgi Personel Karnesi sekmesinde var).
+    const ustHtml='<p class="mini-not">Ay: '+esc(ay)+' &mdash; sube bazinda denetimler ve kamera. (Personel bazli ozet icin Personel Karnesi sekmesi.)</p>';
     el.innerHTML=ustHtml+html;
   }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Rapor yuklenemedi.</p>';}
 }
