@@ -821,6 +821,14 @@ function kameraDurum(o){
 function kameraIsOzeti(o){
   return 'Kamera: '+esc(subeAdi(o.branchId))+' - '+esc(o.amount)+' '+esc(YON_ETIKET[o.direction]||'')+(o.personel?(' / '+esc(o.personel)):'');
 }
+// Gorevler bolumunden bir kamera/kasa incelemesini "bitti" (cozuldu+incelendi) isaretler.
+async function kameraGorevBitir(id){
+  try{
+    await db.collection('cashEvents').doc(id).update({resolved:true,cameraChecked:true});
+    await logYaz('guncelleme','Kasa/Kamera',id,'gorev bitti (cozuldu)');
+    await gorevCiz();
+  }catch(err){console.error(err);}
+}
 
 // Bu haftanin rota gun hucrelerine dusecek kamera atamalari.
 // Donen yapi: { rotaKisiAdi: { gunIndex: ['Kamera: <sube>', ...] } }
@@ -1650,8 +1658,11 @@ async function gorevCiz(){
         b1.innerHTML=kameraIsOzeti(o)+' <span class="rozet '+d.css+'">'+esc(d.metin)+'</span>';
         const b2=document.createElement('div');b2.className='kayit-detay';
         b2.textContent='Inceleyen: '+atananAdlari(o)+(kt?' - Inceleme tarihi: '+kt:'')+(o.finding?' - Bulgu: '+o.finding:'');
-        const b3=document.createElement('div');b3.className='kayit-alt';
-        b3.innerHTML='<span class="mini-not">Detay ve duzenleme icin <b>Kasa &amp; Kamera</b> sekmesi</span>';
+        const b3=document.createElement('div');b3.className='kayit-alt satir-arac';
+        const bit=document.createElement('button');bit.className='ikincil kucuk';bit.textContent='Gorev bitti';
+        bit.onclick=()=>kameraGorevBitir(o.id);b3.appendChild(bit);
+        const ipu=document.createElement('span');ipu.className='mini-not';ipu.style.marginLeft='6px';
+        ipu.innerHTML='Detay/duzenleme icin <b>Kasa &amp; Kamera</b> sekmesi';b3.appendChild(ipu);
         li.appendChild(b1);li.appendChild(b2);li.appendChild(b3);u.appendChild(li);});
     }
   }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Gorevler yuklenemedi.</li>';}
