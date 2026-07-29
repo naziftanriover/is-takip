@@ -111,6 +111,8 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 .karne-tablo tr:hover{background:var(--renk-tint)}
 .karne-zarar{font-weight:700;color:var(--kirmizi)}
 .karne-toplam{font-weight:700;background:var(--renk-yuzey)}
+.pdf-btn{background:#fff;color:var(--renk-ana-koyu);border:1px solid var(--renk-ana);border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.pdf-btn:hover{background:var(--renk-tint)}
 .kayit-liste{list-style:none;padding:0;margin:10px 0;display:grid;gap:10px}
 .kayit-satiri{background:var(--renk-kart);border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);
   padding:12px 14px;box-shadow:var(--golge)}
@@ -392,6 +394,7 @@ body.salt-okunur #kullaniciAdi{font-weight:700}
           <button id="rOnceki" type="button" class="ikincil kucuk">&#9664; Onceki hafta</button>
           <span class="rota-etiket" id="rHaftaBilgi"></span>
           <button id="rSonraki" type="button" class="ikincil kucuk">Yeni haftaya gec &#9654;</button>
+          <button id="rPdf" type="button" class="ikincil kucuk pdf-btn">&#128424; PDF / Yazdir</button>
         </div>
         <div class="rota-alt">
           <div class="rota-sol">
@@ -415,6 +418,7 @@ body.salt-okunur #kullaniciAdi{font-weight:700}
       <div class="kart-form">
         <div class="form-satir">
           <div class="alan"><label>Ay</label><input id="raporAy" type="month" /></div>
+          <div class="alan" style="display:flex;align-items:flex-end"><button id="raporPdf" type="button" class="pdf-btn">&#128424; PDF olarak indir / Yazdir</button></div>
         </div>
       </div>
       <div id="raporIcerik"><p class="bos-satir">Yukleniyor...</p></div>
@@ -427,6 +431,7 @@ body.salt-okunur #kullaniciAdi{font-weight:700}
         <div class="form-satir">
           <div class="alan"><label>Donem</label><input id="karneAy" type="month" /></div>
           <div class="alan"><label class="onay-satiri" style="margin-top:26px"><input id="karneTum" type="checkbox" /> Tum zamanlar</label></div>
+          <div class="alan" style="display:flex;align-items:flex-end"><button id="karnePdf" type="button" class="pdf-btn">&#128424; PDF olarak indir / Yazdir</button></div>
         </div>
       </div>
       <div id="karneIcerik"><p class="bos-satir">Yukleniyor...</p></div>
@@ -1811,6 +1816,89 @@ async function karneCiz(){
     el.innerHTML=h;
   }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Karne yuklenemedi.</p>';}
 }
+// ================== PROFESYONEL PDF / YAZDIRMA ==================
+// Ayri bir pencerede profesyonel duzenli cikti olusturur; tarayicidan "PDF olarak kaydet" secilebilir.
+function yaziciStil(genis){
+  return '@page{size:A4 '+(genis?'landscape':'portrait')+';margin:13mm}'+
+  '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+  'body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1e293b;margin:0;font-size:12px;line-height:1.45}'+
+  '@media print{.ekran-only{display:none!important}}'+
+  '.ekran-only{background:#0f766e;color:#fff;padding:10px 14px;display:flex;gap:12px;align-items:center;font-size:13px}'+
+  '.ekran-only button{background:#fff;color:#0f766e;border:none;border-radius:6px;padding:8px 14px;font-weight:700;cursor:pointer}'+
+  '.pr-wrap{padding:0 4px}'+
+  '.pr-head{border-bottom:3px solid #0f766e;padding:0 0 10px;margin:0 0 12px;display:flex;justify-content:space-between;align-items:flex-end}'+
+  '.pr-marka{font-size:26px;font-weight:800;letter-spacing:2px;color:#0f766e}'+
+  '.pr-sub{font-size:12px;color:#64748b}'+
+  '.pr-title-row{display:flex;justify-content:space-between;align-items:flex-start;margin:0 0 14px}'+
+  '.pr-title-row h1{font-size:19px;margin:0;color:#0f766e}'+
+  '.pr-meta{text-align:right;font-size:11px;color:#64748b}'+
+  '.pano-kart{border:1px solid #d9e2df;border-radius:8px;padding:12px 14px;margin:0 0 12px;page-break-inside:avoid}'+
+  '.pano-kart h3{margin:0 0 8px;color:#0f766e;font-size:15px}'+
+  '.mini-not{color:#64748b;font-size:11px;margin:4px 0}.bos-satir{color:#94a3b8;font-style:italic}'+
+  '.rapor-dogru{color:#16a34a;font-weight:600}.rapor-yanlis{color:#dc2626;font-weight:600}'+
+  '.rapor-liste{list-style:none;padding:0;margin:6px 0}.rapor-liste li{border-bottom:1px solid #eef2f0;padding:4px 0;font-size:12px}'+
+  '.rapor-tarih{font-weight:700}'+
+  '.rapor-bahis{margin:6px 0;padding:6px 8px;border:1px solid #e2e8e4;border-radius:6px;page-break-inside:avoid}'+
+  '.rapor-bahis-ic{margin:4px 0 4px 10px;padding:4px 8px;border-left:3px solid #cbd5e1}'+
+  '.bahis-tik{font-weight:700;color:#0f766e}'+
+  '.foto-galeri{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}'+
+  '.foto-kucuk{height:90px;width:auto;border:1px solid #cbd5e1;border-radius:4px;object-fit:cover}'+
+  '.personel-rozet{display:inline-block;background:#e6f4f1;color:#0f766e;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:5px}'+
+  '.zarar-rozet{display:inline-block;background:#fee2e2;color:#dc2626;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:5px}'+
+  '.ceza-rozet{display:inline-block;background:#fef3c7;color:#b45309;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:5px}'+
+  '.rapor-personel li{display:flex;justify-content:space-between;gap:10px}'+
+  'table.karne-tablo{width:100%;border-collapse:collapse;font-size:11.5px}'+
+  '.karne-tablo th,.karne-tablo td{border:1px solid #cbd5e1;padding:6px 8px;text-align:left}'+
+  '.karne-tablo th{background:#e6f4f1;color:#0f766e;font-size:10.5px;text-transform:uppercase}'+
+  '.karne-tablo td.sag,.karne-tablo th.sag{text-align:right;white-space:nowrap}'+
+  '.karne-zarar{color:#dc2626;font-weight:700}.karne-ceza{color:#b45309;font-weight:700}.karne-toplam{background:#f5f8f7;font-weight:700}'+
+  'table.rota-tablo{width:100%;border-collapse:collapse;font-size:12px}'+
+  '.rota-tablo th,.rota-tablo td{border:1px solid #cbd5e1;padding:6px;text-align:center}'+
+  '.rota-tablo th{background:#e6f4f1;color:#0f766e}'+
+  '.rota-tablo .kisi{font-weight:700;text-align:left;background:#f5f8f7}'+
+  '.th-tarih{display:block;font-weight:500;font-size:10px;color:#64748b}'+
+  '.rota-hucre{color:#fff;font-weight:700;border-radius:5px;padding:5px 4px;font-size:11px;display:inline-block;min-width:54px}'+
+  '.rh-mesai{background:#16a34a}.rh-oncall{background:#d97706}.rh-off{background:#94a3b8}.rh-holiday{background:#6366f1}'+
+  '.rota-gorev{display:block;font-size:9px;color:#0f766e;margin-top:3px}.rota-kamera{display:block;font-size:9px;color:#7c3aed;margin-top:3px}'+
+  '.pr-imza{display:flex;justify-content:space-between;font-size:12px;color:#334155;margin-top:34px;padding-top:10px}'+
+  '.pr-imza span{border-top:1px solid #94a3b8;padding-top:6px;width:42%;text-align:center}';
+}
+function yaziciCik(baslik,donem,icHTML,genis){
+  let tarih='';try{tarih=new Date().toLocaleDateString('tr-TR');}catch(e){}
+  const w=window.open('','_blank');
+  if(!w){alert('Yazdirma penceresi acilamadi. Lutfen tarayicida pop-up izni verin.');return;}
+  const html='<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>'+esc(baslik)+' - Security</title>'+
+    '<style>'+yaziciStil(genis)+'</style></head><body>'+
+    '<div class="ekran-only"><button onclick="window.print()">Yazdir / PDF olarak kaydet</button>'+
+    '<span>Yazdir penceresinde hedef olarak &quot;PDF olarak kaydet&quot; secebilirsiniz.</span></div>'+
+    '<div class="pr-wrap">'+
+    '<div class="pr-head"><div><div class="pr-marka">SECURITY</div><div class="pr-sub">SOLIBET &middot; Guvenlik / Denetim Ekibi</div></div>'+
+    '<div class="pr-meta">Cikti tarihi<br><b>'+esc(tarih)+'</b></div></div>'+
+    '<div class="pr-title-row"><h1>'+esc(baslik)+'</h1><div class="pr-meta">'+esc(donem)+'</div></div>'+
+    '<div class="pr-body">'+icHTML+'</div>'+
+    '<div class="pr-imza"><span>Hazirlayan</span><span>Onaylayan (Genel Mudur)</span></div>'+
+    '</div></body></html>';
+  w.document.open();w.document.write(html);w.document.close();
+  setTimeout(function(){try{w.focus();w.print();}catch(e){}},500);
+}
+async function rotaPdf(){
+  const hb=haftaBasi($('rTarih').value||bugun());
+  let plan={};
+  try{const snap=await db.collection('shifts').doc(hb).get();plan=snap.exists&&snap.data().plan?snap.data().plan:{};}catch(e){console.error(e);}
+  yaziciCik('Haftalik Rota / Shift',haftaEtiket(hb),rotaTabloHTML(plan,false,hb),true);
+}
+function raporPdf(){
+  const ay=$('raporAy').value||ayBugun();
+  const ic=$('raporIcerik').innerHTML;
+  if(!ic||/Yukleniyor/.test(ic)){alert('Once rapor yuklensin, sonra PDF alin.');return;}
+  yaziciCik('Aylik Denetim Raporu','Donem: '+ay,ic,false);
+}
+function karnePdf(){
+  const donem=$('karneTum').checked?'Tum zamanlar':('Donem: '+($('karneAy').value||ayBugun()));
+  const ic=$('karneIcerik').innerHTML;
+  if(!ic||/Yukleniyor/.test(ic)){alert('Once karne yuklensin, sonra PDF alin.');return;}
+  yaziciCik('Personel Karnesi',donem,ic,false);
+}
 // ================== KASA ==================
 function kasaBaslat(){
   secimDoldur($('kSube'),durum.subeler,'Sube secin...');
@@ -1965,6 +2053,9 @@ $('rSonraki').addEventListener('click',()=>rotaHaftaKaydir(HAFTA_GUN_SAYISI));
 $('raporAy').addEventListener('change',raporCiz);
 $('karneAy').addEventListener('change',karneCiz);
 $('karneTum').addEventListener('change',karneCiz);
+$('rPdf').addEventListener('click',rotaPdf);
+$('raporPdf').addEventListener('click',raporPdf);
+$('karnePdf').addEventListener('click',karnePdf);
 let baslatildi=false;
 auth.onAuthStateChanged(async(u)=>{
   if(!u){
