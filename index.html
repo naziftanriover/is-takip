@@ -1809,8 +1809,10 @@ function auditBahisBlogu(kutu,audit,fotolar){
       bbas.onclick=()=>{bo.classList.toggle('acik');bbas.querySelector('.bahis-ok').innerHTML=bo.classList.contains('acik')?'&#9660;':'&#9654;';};
       bo.appendChild(bbas);bo.appendChild(bgov);bl.appendChild(bo);});
     kutu.appendChild(bl);}
-  // yeni hatali bahis ekleme (foto sart degil)
+  // yeni hatali bahis ekleme (foto sart degil) - VARSAYILAN KAPALI; "+ Hatali bahis ekle" ile acilir
   const yeni=document.createElement('div');yeni.className='yeni-bahis';
+  const acBtn=document.createElement('button');acBtn.type='button';acBtn.textContent='+ Hatali bahis ekle';acBtn.style.marginTop='6px';
+  const form=document.createElement('div');form.className='yeni-bahis-form';form.style.display='none';
   const yuk=document.createElement('div');yuk.className='foto-yuk';
   const tik=document.createElement('input');tik.type='text';tik.className='foto-not';tik.placeholder='Ticket no (or. 30746)';tik.maxLength=40;tik.style.flex='0 1 150px';
   const not=document.createElement('input');not.type='text';not.className='foto-not';not.placeholder='Aciklama (or. 3500 odeyecegine 3000 odedi)';
@@ -1818,11 +1820,17 @@ function auditBahisBlogu(kutu,audit,fotolar){
   yuk.appendChild(tik);yuk.appendChild(not);yuk.appendChild(zar);
   const kbas=document.createElement('div');kbas.className='mini-not';kbas.style.margin='6px 0 2px';kbas.textContent='Suclu personel(ler) - her birine ayri ceza, zarar tik ile secilir:';
   const ked=kisilerEditor(null);
-  const btn=document.createElement('button');btn.type='button';btn.textContent='+ Hatali bahis ekle';btn.style.marginTop='6px';
-  btn.onclick=()=>{const t=tik.value.trim(),a=not.value.trim(),z=parseFloat(zar.value)||0,ks=ked._al();
+  const arac=document.createElement('div');arac.className='satir-arac';arac.style.marginTop='8px';
+  const kaydet=document.createElement('button');kaydet.type='button';kaydet.textContent='Kaydet';
+  const iptal=document.createElement('button');iptal.type='button';iptal.className='ikincil';iptal.textContent='Iptal';
+  arac.appendChild(kaydet);arac.appendChild(iptal);
+  form.appendChild(yuk);form.appendChild(kbas);form.appendChild(ked);form.appendChild(arac);
+  acBtn.onclick=()=>{form.style.display='';acBtn.style.display='none';$('aHata').textContent='';tik.focus();};
+  iptal.onclick=()=>{form.style.display='none';acBtn.style.display='';$('aHata').textContent='';};
+  kaydet.onclick=()=>{const t=tik.value.trim(),a=not.value.trim(),z=parseFloat(zar.value)||0,ks=ked._al();
     if(!t&&!a){$('aHata').textContent='Ticket no veya aciklama girin.';return;}
     tik.value='';not.value='';zar.value='';auditBahisYeni(audit.id,t,a,z,ks);};
-  yeni.appendChild(yuk);yeni.appendChild(kbas);yeni.appendChild(ked);yeni.appendChild(btn);kutu.appendChild(yeni);
+  yeni.appendChild(acBtn);yeni.appendChild(form);kutu.appendChild(yeni);
 }
 // Audit inline duzenleme formu (sube, tarih araligi, ticket araligi, denetleyenler)
 function auditDuzenleFormu(a){
