@@ -844,6 +844,9 @@ function sekmeleriKur(){
     menuKapat();   // sekme secince mobil menuyu kapat
     if(b.dataset.hedef==='sekme-log') logCiz();
     if(b.dataset.hedef==='sekme-pano') panoCiz();
+    if(b.dataset.hedef==='sekme-gorevler') gorevCiz();
+    if(b.dataset.hedef==='sekme-kasa') kasaCiz();
+    if(b.dataset.hedef==='sekme-denetim') denetimCiz();
     if(b.dataset.hedef==='sekme-audit') auditCiz();
     if(b.dataset.hedef==='sekme-rota') rotaYukle();
     if(b.dataset.hedef==='sekme-rapor') raporCiz();
@@ -2554,9 +2557,17 @@ async function kasaCiz(){
     if(s.empty){u.innerHTML='<li class="bos-satir">Henuz kasa/kamera kaydi yok.</li>';return;}
     s.forEach(doc=>{const o=doc.data();const id=doc.id;
       if(duzenlenenKasa===id){u.appendChild(kasaDuzenleFormu(id,o));return;}
-      const li=document.createElement('li');li.className='kayit-satiri';
-      const bas=document.createElement('div');bas.className='kayit-baslik';
-      bas.textContent=`${o.date} - ${subeAdi(o.branchId)} - ${o.amount} ${YON_ETIKET[o.direction]||''}`+(o.resolved?' (cozuldu)':' (acik)');
+      const baslikMetni=`${o.date} - ${subeAdi(o.branchId)} - ${o.amount} ${YON_ETIKET[o.direction]||''}`;
+      // Cozulen kayit KUCULUR (sadece baslik); tiklayinca detay acilir. Acik kayitlar bastan acik.
+      const li=document.createElement('li');li.className='kayit-satiri gorev-kart';
+      if(!o.resolved) li.classList.add('acik');
+      const head=document.createElement('div');head.className='gorev-bas';
+      head.innerHTML='<span class="gorev-ok">'+(o.resolved?'&#9654;':'&#9660;')+'</span>'+
+        '<span class="gorev-ad">'+esc(baslikMetni)+'</span>'+
+        '<span class="rozet '+(o.resolved?'yesil':'kirmizi')+'">'+(o.resolved?'Cozuldu':'Acik')+'</span>';
+      head.onclick=()=>{li.classList.toggle('acik');head.querySelector('.gorev-ok').innerHTML=li.classList.contains('acik')?'&#9660;':'&#9654;';};
+      li.appendChild(head);
+      const govde=document.createElement('div');govde.className='gorev-govde';
       const det=document.createElement('div');det.className='kayit-detay';
       det.textContent=(o.cameraChecked?'Kamera incelendi. ':'Kamera incelenmedi. ')+(o.finding?'Bulgu: '+o.finding:'Bulgu notu yok.')+(o.personel?' | Personel: '+o.personel:'')+(o.zarar?' | Zarar: '+tl(o.zarar):'')+(o.ceza?' | Ceza: '+saat(o.ceza):'');
       const ata=document.createElement('div');ata.className='kayit-alt';
@@ -2567,10 +2578,10 @@ async function kasaCiz(){
       const dz=document.createElement('button');dz.className='ikincil kucuk';dz.textContent='Duzenle';
       dz.onclick=()=>{duzenlenenKasa=id;kasaCiz();};alt.appendChild(dz);
       if(yoneticiMi()){const b=document.createElement('button');b.className='ikincil kucuk';b.textContent='Sil';
-        b.onclick=()=>kasaSil(id,bas.textContent);alt.appendChild(b);}
-      li.appendChild(bas);li.appendChild(det);li.appendChild(ata);
-      if((Number(o.zarar)||0)>0){ li.appendChild(kasaGeriAlim(id,o)); }
-      li.appendChild(alt);u.appendChild(li);});
+        b.onclick=()=>kasaSil(id,baslikMetni);alt.appendChild(b);}
+      govde.appendChild(det);govde.appendChild(ata);
+      if((Number(o.zarar)||0)>0){ govde.appendChild(kasaGeriAlim(id,o)); }
+      govde.appendChild(alt);li.appendChild(govde);u.appendChild(li);});
   }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Kayitlar yuklenemedi.</li>';}
 }
 
