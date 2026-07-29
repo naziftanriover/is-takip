@@ -917,8 +917,9 @@ function gorevTarihi(g){return g.taskDate||g.dueDate||null;}
 // Dashboard gorev panelini cizer.
 function panoGorevleriCiz(gorevler,kameralar){
   const gEl=$('panoGorevler');
-  const aktifKamera=(kameralar||[]).filter(o=>!o.resolved);
-  if(!gorevler.length && !aktifKamera.length){gEl.innerHTML='<p class="bos-satir">Henuz gorev yok.</p>';return;}
+  // Kamera incelemeleri: cozulenler de gorunur (silinmez), durumlariyla. Once devam edenler.
+  const kamListe=(kameralar||[]).slice().sort((a,b)=>(a.resolved?1:0)-(b.resolved?1:0));
+  if(!gorevler.length && !kamListe.length){gEl.innerHTML='<p class="bos-satir">Henuz gorev yok.</p>';return;}
   let html='';
   gorevler.forEach(g=>{
     const bitti=g.status==='done';
@@ -928,7 +929,7 @@ function panoGorevleriCiz(gorevler,kameralar){
       `${gt?' <span class="mini-not">('+esc(gt)+')</span>':''}</span>`+
       `<span class="rozet ${bitti?'yesil':'kirmizi'}">${bitti?'Yapildi':'Yapilmadi'}</span></div>`;
   });
-  aktifKamera.forEach(o=>{
+  kamListe.forEach(o=>{
     const d=kameraDurum(o);const kt=kameraTarihi(o);
     html+=`<div class="gorev-satiri"><span><span class="nokta ${d.css}"></span>`+
       `<b>${esc(atananAdlari(o))}</b> - ${kameraIsOzeti(o)}`+
@@ -977,6 +978,14 @@ async function kameraGorevBitir(id){
   try{
     await db.collection('cashEvents').doc(id).update({resolved:true,cameraChecked:true});
     await logYaz('guncelleme','Kasa/Kamera',id,'gorev bitti (cozuldu)');
+    await gorevCiz();
+  }catch(err){console.error(err);}
+}
+// Bitmis kamera gorevini tekrar acar (Gorevler bolumunden).
+async function kameraGeriAc(id){
+  try{
+    await db.collection('cashEvents').doc(id).update({resolved:false});
+    await logYaz('guncelleme','Kasa/Kamera',id,'gorev yeniden acildi');
     await gorevCiz();
   }catch(err){console.error(err);}
 }
@@ -1923,9 +1932,9 @@ async function gorevCiz(){
     ]);
     const fotoHarita=await gorevFotoHaritasi();
     const kameralar=kSnap.docs.map(d=>({id:d.id,...d.data()}));
-    const aktifKamera=kameralar.filter(o=>!o.resolved);
+    const kamListe=kameralar.slice().sort((a,b)=>(a.resolved?1:0)-(b.resolved?1:0));   // devam edenler once, cozulenler silinmez
     u.innerHTML='';
-    if(s.empty && !aktifKamera.length){u.innerHTML='<li class="bos-satir">Henuz gorev yok.</li>';return;}
+    if(s.empty && !kamListe.length){u.innerHTML='<li class="bos-satir">Henuz gorev yok.</li>';return;}
     s.forEach(doc=>{const g=doc.data();const id=doc.id;const fotolar=fotoHarita[id]||[];
       if(id===duzenlenenGorev){ u.appendChild(gorevDuzenleFormu(id,g)); return; }
       const li=document.createElement('li');li.className='kayit-satiri gorev-kart';
@@ -1983,19 +1992,21 @@ async function gorevCiz(){
       if(g.createdBy===durum.uid||yoneticiMi()){const b=document.createElement('button');
         b.className='ikincil kucuk';b.textContent='Sil';b.onclick=()=>gorevSil(id,g.title);alt.appendChild(b);}
       govde.appendChild(alt);li.appendChild(govde);u.appendChild(li);});
-    // ---- KAMERA INCELEMELERI (is olarak) ----
-    if(aktifKamera.length){
+    // ---- KAMERA INCELEMELERI (is olarak; cozulenler de silinmez, "bitti" gorunur) ----
+    if(kamListe.length){
       const bas=document.createElement('li');bas.className='bos-satir';bas.style.cssText='font-weight:700;color:var(--kamera);background:none';
-      bas.textContent='Kamera incelemeleri (devam eden)';u.appendChild(bas);
-      aktifKamera.forEach(o=>{const d=kameraDurum(o);const kt=kameraTarihi(o);
-        const li=document.createElement('li');li.className='kayit-satiri';
+      bas.textContent='Kamera incelemeleri';u.appendChild(bas);
+      kamListe.forEach(o=>{const d=kameraDurum(o);const kt=kameraTarihi(o);
+        const li=document.createElement('li');li.className='kayit-satiri';if(o.resolved)li.style.opacity='.75';
         const b1=document.createElement('div');b1.className='kayit-baslik';
         b1.innerHTML=kameraIsOzeti(o)+' <span class="rozet '+d.css+'">'+esc(d.metin)+'</span>';
         const b2=document.createElement('div');b2.className='kayit-detay';
         b2.textContent='Inceleyen: '+atananAdlari(o)+(kt?' - Inceleme tarihi: '+kt:'')+(o.finding?' - Bulgu: '+o.finding:'');
         const b3=document.createElement('div');b3.className='kayit-alt satir-arac';
-        const bit=document.createElement('button');bit.className='ikincil kucuk';bit.textContent='Gorev bitti';
-        bit.onclick=()=>kameraGorevBitir(o.id);b3.appendChild(bit);
+        if(!o.resolved){const bit=document.createElement('button');bit.className='ikincil kucuk';bit.textContent='Gorev bitti';
+          bit.onclick=()=>kameraGorevBitir(o.id);b3.appendChild(bit);}
+        else{const ac=document.createElement('button');ac.className='ikincil kucuk';ac.textContent='Geri ac';
+          ac.onclick=()=>kameraGeriAc(o.id);b3.appendChild(ac);}
         const ipu=document.createElement('span');ipu.className='mini-not';ipu.style.marginLeft='6px';
         ipu.innerHTML='Detay/duzenleme icin <b>Kasa &amp; Kamera</b> sekmesi';b3.appendChild(ipu);
         li.appendChild(b1);li.appendChild(b2);li.appendChild(b3);u.appendChild(li);});
@@ -2124,6 +2135,7 @@ async function raporCiz(){
             esc(o.amount)+' '+(YON_ETIKET[o.direction]||'')+' - <b>'+durumK+'</b>'+bulguK+
             (o.personel?'<span class="personel-rozet">'+esc(o.personel)+'</span>':'')+
             tutarRozet(o.zarar)+(o.ceza?'<span class="ceza-rozet">'+saat(o.ceza)+'</span>':'')+
+            ((o.zarar>0&&o.geriAlinan&&o.geriAlinan>=o.zarar)?'<span class="geri-rozet">geri alindi</span>':((o.zarar>0&&o.geriAlinan)?'<span class="geri-rozet">geri: '+tl(o.geriAlinan)+'</span>':''))+
             ' <span class="mini-not">(inceleyen: '+esc(atananAdlari(o))+')</span></li>';});
         html+='</ul>';
       }
@@ -2166,7 +2178,7 @@ async function karneTopla(scope){
         {sube:subeAdi(a.branchId),baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama,fotolar:b.fotolar.map(f=>f.dataUrl),odemeler:(k.zararli?bahisOdemeler(b):[])},kg); }); }); });
   // kamera / kasa
   kasalar.forEach(o=>{ const t=kameraTarihi(o)||o.date||''; if(!uyar(t))return; if(o.personel) ekle(o.personel,'kamera',t,o.zarar,o.ceza,
-    {sube:subeAdi(o.branchId),baslik:(o.amount+' '+(YON_ETIKET[o.direction]||'')),aciklama:o.finding,fotolar:[]}); });
+    {sube:subeAdi(o.branchId),baslik:(o.amount+' '+(YON_ETIKET[o.direction]||'')),aciklama:o.finding,fotolar:[],odemeler:bahisOdemeler(o)}, o.geriAlinan); });
   Object.keys(map).forEach(k=>map[k].hatalar.sort((a,b)=>String(b.tarih).localeCompare(String(a.tarih))));
   return Object.keys(map).map(k=>map[k]).sort((a,b)=>b.zarar-a.zarar||b.ceza-a.ceza||b.toplam-a.toplam||a.ad.localeCompare(b.ad,'tr'));
 }
@@ -2483,6 +2495,57 @@ async function kasaGuncelle(id,veri){
     duzenlenenKasa=null; await kasaCiz();
   }catch(err){console.error(err);h.textContent='Guncellenemedi. Tekrar deneyin.';}
 }
+// Kasa/kamera kaydina musteri odemesi ekler (taksit). geriAlinan=odemeler toplami.
+async function kasaOdemeEkle(id,tutar,tarih){
+  const h=$('kHata');h.style.color='';h.textContent='';
+  try{
+    const ref=db.collection('cashEvents').doc(id);const snap=await ref.get();const o=snap.data()||{};
+    let od=Array.isArray(o.odemeler)?o.odemeler.slice():[];
+    if(!od.length && Number(o.geriAlinan)>0) od.push({tutar:Number(o.geriAlinan)||0,tarih:''});
+    od.push({tutar:Number(tutar)||0,tarih:tarih||''});
+    const toplam=od.reduce((s,x)=>s+(Number(x.tutar)||0),0);
+    await ref.update({odemeler:od,geriAlinan:toplam});
+    await logYaz('guncelleme','Kasa/Kamera',id,'odeme +'+tl(tutar)+(tarih?(' ('+tarih+')'):''));
+    await kasaCiz();
+  }catch(err){console.error(err);h.textContent='Odeme eklenemedi. Tekrar deneyin.';}
+}
+async function kasaOdemeSil(id,idx){
+  if(typeof confirm==='function'&&!confirm('Bu odeme kaydi silinsin mi?'))return;
+  const h=$('kHata');h.style.color='';h.textContent='';
+  try{
+    const ref=db.collection('cashEvents').doc(id);const snap=await ref.get();const o=snap.data()||{};
+    let od=Array.isArray(o.odemeler)?o.odemeler.slice():[];
+    if(!od.length && Number(o.geriAlinan)>0) od.push({tutar:Number(o.geriAlinan)||0,tarih:''});
+    od.splice(idx,1);
+    const toplam=od.reduce((s,x)=>s+(Number(x.tutar)||0),0);
+    await ref.update({odemeler:od,geriAlinan:toplam});
+    await logYaz('guncelleme','Kasa/Kamera',id,'odeme silindi');
+    await kasaCiz();
+  }catch(err){console.error(err);h.textContent='Silinemedi.';}
+}
+// Kasa/kamera kaydi icin musteriden geri alim paneli (taksitli). zarar>0 iken gosterilir.
+function kasaGeriAlim(id,o){
+  const galma=document.createElement('div');galma.className='geri-alma';
+  const odemeler=bahisOdemeler(o);
+  const odenen=odemeler.reduce((s,x)=>s+(Number(x.tutar)||0),0);
+  const kalan=Math.max(0,(Number(o.zarar)||0)-odenen);
+  const ozet=document.createElement('div');ozet.className='cb-ust';
+  ozet.innerHTML='<b>Musteriden geri alim</b> &middot; Zarar: '+tl(o.zarar||0)+' &middot; Odenen: <b class="karne-geri">'+tl(odenen)+'</b> &middot; Kalan: <b class="'+(kalan>0?'karne-zarar':'karne-geri')+'">'+tl(kalan)+'</b>'+(kalan<=0&&odenen>0?' <span class="geri-rozet">tamami alindi</span>':'');
+  galma.appendChild(ozet);
+  if(odemeler.length){const ul=document.createElement('ul');ul.className='odeme-liste';
+    odemeler.forEach((x,i)=>{const li2=document.createElement('li');
+      li2.innerHTML='<span class="odeme-no">'+(i+1)+'. odeme</span> <span class="odeme-tarih">'+(x.tarih?uzunTarih(x.tarih):'(tarihsiz)')+'</span> &middot; <b>'+tl(x.tutar)+'</b>';
+      const sil=document.createElement('button');sil.type='button';sil.className='ikincil kucuk satir-arac';sil.textContent='sil';sil.style.marginLeft='8px';
+      sil.onclick=()=>kasaOdemeSil(id,i);li2.appendChild(sil);ul.appendChild(li2);});
+    galma.appendChild(ul);}
+  const ekleF=document.createElement('div');ekleF.className='odeme-ekle satir-arac';
+  const ti=document.createElement('input');ti.type='number';ti.step='0.01';ti.placeholder='Odenen tutar (TL)';if(kalan>0)ti.value=kalan;ti.style.flex='0 1 160px';
+  const di=document.createElement('input');di.type='date';di.value=bugun();di.style.flex='0 1 160px';
+  const eb=document.createElement('button');eb.type='button';eb.className='kucuk';eb.textContent='Odeme ekle';
+  eb.onclick=()=>{const t=parseFloat(ti.value)||0;if(t<=0){$('kHata').textContent='Odenen tutar girin.';return;}kasaOdemeEkle(id,t,di.value);};
+  ekleF.appendChild(ti);ekleF.appendChild(di);ekleF.appendChild(eb);galma.appendChild(ekleF);
+  return galma;
+}
 async function kasaCiz(){
   const u=$('kListe');
   try{
@@ -2505,7 +2568,9 @@ async function kasaCiz(){
       dz.onclick=()=>{duzenlenenKasa=id;kasaCiz();};alt.appendChild(dz);
       if(yoneticiMi()){const b=document.createElement('button');b.className='ikincil kucuk';b.textContent='Sil';
         b.onclick=()=>kasaSil(id,bas.textContent);alt.appendChild(b);}
-      li.appendChild(bas);li.appendChild(det);li.appendChild(ata);li.appendChild(alt);u.appendChild(li);});
+      li.appendChild(bas);li.appendChild(det);li.appendChild(ata);
+      if((Number(o.zarar)||0)>0){ li.appendChild(kasaGeriAlim(id,o)); }
+      li.appendChild(alt);u.appendChild(li);});
   }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Kayitlar yuklenemedi.</li>';}
 }
 
