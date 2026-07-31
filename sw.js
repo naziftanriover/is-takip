@@ -3,7 +3,7 @@
    - Firebase / gstatic gibi DIS istekler HIC dokunulmadan gecer.
    - Gezinme (sayfa acma): once agdan (guncel surum), internet yoksa cache'ten.
 */
-const CACHE = 'security-v3';
+const CACHE = 'security-v4';
 const ASSETS = ['./', './index.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
