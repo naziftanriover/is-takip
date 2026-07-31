@@ -622,7 +622,7 @@ const durum={uid:null,profil:null,subeler:[],kullanicilar:[]};
 function adim(){return durum.profil&&durum.profil.name?durum.profil.name:'Kullanici';}
 function yoneticiMi(){return !!(durum.profil&&durum.profil.role==='admin');}
 // Genel Mudur (salt-okunur) e-postalari. Bu hesaplar sadece izler; veri girme/duzenleme/silme kapali.
-const YONETICI_EMAILLER=['levent@solibet.com'];
+const YONETICI_EMAILLER=['levent@solibet.com','bahoz@solibet.com'];
 function saltOkunurMu(){const u=auth.currentUser;return !!(u&&u.email&&YONETICI_EMAILLER.indexOf(u.email.toLowerCase())>=0);}
 // Bolge muduru (sadece ceza girebilir): gorev/audit/kamera EKLEYEMEZ, sadece hatalara ceza saati yazar.
 const CEZA_EMAILLER=['durmus@solibet.com'];
