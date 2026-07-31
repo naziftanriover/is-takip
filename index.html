@@ -38,7 +38,9 @@ button{cursor:pointer;font-size:15px;font-weight:600;border:none;border-radius:8
 button:hover{background:var(--renk-ana-koyu)}
 button:disabled{opacity:.6;cursor:default}
 .tam-genislik{width:100%}
-.ust-bar{background:linear-gradient(90deg,#0f766e,#115e59);border-bottom:none;padding:14px 24px;
+.ust-bar{background:linear-gradient(90deg,#0f766e,#115e59);border-bottom:none;
+  /* iPhone PWA: ust cubuk centik/durum-cubugu altina girmesin (safe-area) */
+  padding:calc(14px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) 14px calc(24px + env(safe-area-inset-left));
   display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 8px rgba(15,23,42,.15)}
 .marka{font-weight:700;color:#fff;font-size:17px;letter-spacing:.4px}
 .kullanici{color:rgba(255,255,255,.9);font-size:14px}
@@ -46,7 +48,7 @@ button:disabled{opacity:.6;cursor:default}
 .ust-bar .ikincil:hover{background:rgba(255,255,255,.16)}
 .ust-sag{display:flex;align-items:center;gap:12px}
 .ust-sol{display:flex;align-items:center;gap:10px}
-.menu-btn{display:none;background:transparent;border:none;color:#fff;font-size:22px;line-height:1;padding:2px 8px;cursor:pointer}
+.menu-btn{display:none;background:transparent;border:none;color:#fff;font-size:24px;line-height:1;padding:8px 12px;margin:-4px 0;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.2);touch-action:manipulation}
 .menu-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:150}
 .menu-overlay.acik{display:block}
 .ikincil{background:transparent;color:var(--renk-ana);border:1px solid var(--renk-ana)}
@@ -69,7 +71,9 @@ button:disabled{opacity:.6;cursor:default}
   .govde{flex-direction:column}
   /* Sol menu -> acilir cekmece (drawer) */
   .sekme-bar{position:fixed;top:0;left:0;bottom:0;height:100dvh;width:240px;z-index:200;
-    flex-direction:column;flex-wrap:nowrap;padding:16px 10px;overflow-y:auto;
+    flex-direction:column;flex-wrap:nowrap;overflow-y:auto;
+    /* iPhone PWA: centik ustte, home-indicator altta menuyu ezmesin */
+    padding:calc(16px + env(safe-area-inset-top)) 10px calc(16px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
     transform:translateX(-100%);transition:transform .22s ease;box-shadow:2px 0 18px rgba(0,0,0,.28);min-height:0}
   .sekme-bar.acik{transform:translateX(0)}
   .sekme-btn{width:100%;border-left:3px solid transparent;border-bottom:none;border-radius:0 8px 8px 0;padding:13px 14px;font-size:16px}
