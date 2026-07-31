@@ -245,6 +245,12 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 .audit-tarih{font-weight:700;color:var(--renk-ana-koyu)}
 .audit-ticket{color:var(--renk-metin)}
 .audit-kisi{color:var(--renk-soluk);font-size:13px}
+.audit-bas{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;cursor:pointer;font-size:14px}
+.audit-ok{color:var(--renk-ana);font-size:12px;flex:0 0 auto}
+.audit-no{font-weight:700;color:#fff;background:var(--renk-ana);border-radius:6px;padding:2px 9px;font-size:13px}
+.audit-bahis-say{color:var(--renk-soluk);font-size:13px;margin-left:auto}
+.audit-govde{display:none;margin-top:10px;border-top:1px solid var(--renk-cizgi);padding-top:10px}
+.audit-kart.acik .audit-govde{display:block}
 .rapor-bahis-ic{margin:4px 0 4px 10px;padding:4px 8px;border-left:3px solid var(--renk-cizgi)}
 .bahis-arac{display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;margin-top:6px}
 /* Cok-kisi secim (atamalar) */
@@ -660,6 +666,7 @@ function kisiSecimAl(elId){ const el=$(elId); if(!el) return []; return Array.pr
 function kisiSecimTemizle(elId){ const el=$(elId); if(!el) return; el.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;}); }
 // Inline DUZENLEME durumu (hangi kayit su an duzenleniyor)
 let duzenlenenGorev=null, duzenlenenAudit=null, duzenlenenBahis=null, duzenlenenKasa=null, duzenlenenDenetim=null;
+const acikAuditSet=new Set();   // Audit sekmesinde acik (bahisleri gorunen) audit id'leri - re-render'da korunur
 // Element-tabanli kisi secim (inline duzenleme formlari icin; id gerektirmez)
 function kisiSecimEl(secili){ const el=document.createElement('div'); el.className='kisi-secim'; const sec=Array.isArray(secili)?secili:[];
   takimRoster().forEach(function(k){ const l=document.createElement('label'); l.className='kisi-onay';
@@ -1910,28 +1917,43 @@ async function auditCiz(){
     $('auditOzet').innerHTML=auditOzetTabloHTML(audits);
     if(!audits.length){el.innerHTML='<p class="bos-satir">Henuz audit kaydi yok.</p>';return;}
     el.innerHTML='';
+    const zmn=x=>(x&&x.seconds)||0;   // Firestore Timestamp -> saniye (tiebreak)
     durum.subeler.forEach(sube=>{
       const list=audits.filter(a=>a.branchId===sube.id);
       if(!list.length) return;
+      // NUMARALANDIRMA: kronolojik sira (en eski audit = 1. Audit)
+      const krono=list.slice().sort((a,b)=>String(a.startDate||a.endDate||'').localeCompare(String(b.startDate||b.endDate||''))||(zmn(a.createdAt)-zmn(b.createdAt)));
+      const noHarita={}; krono.forEach((a,i)=>{noHarita[a.id]=i+1;});
+      // GORUNTU SIRASI: en yeni audit EN USTTE
+      const goster=list.slice().sort((a,b)=>String(b.endDate||b.startDate||'').localeCompare(String(a.endDate||a.startDate||''))||(zmn(b.createdAt)-zmn(a.createdAt)));
       const grp=document.createElement('div');grp.className='audit-sube-grup';
-      const bas=document.createElement('h3');bas.className='audit-sube-bas';bas.textContent=sube.name;grp.appendChild(bas);
-      list.forEach(a=>{
+      const bas=document.createElement('h3');bas.className='audit-sube-bas';bas.textContent=sube.name+' ('+list.length+' audit)';grp.appendChild(bas);
+      goster.forEach(a=>{
         if(a.id===duzenlenenAudit){ grp.appendChild(auditDuzenleFormu(a)); return; }
-        const kart=document.createElement('div');kart.className='audit-kart';
-        const ust=document.createElement('div');ust.className='audit-ust';
-        ust.innerHTML='<span class="audit-tarih">'+uzunTarih(a.startDate)+' - '+uzunTarih(a.endDate)+'</span>'+
+        const bahisSay=auditBahisleri(a,fotoHarita[a.id]||[]).length;
+        const acik=acikAuditSet.has(a.id);
+        const kart=document.createElement('div');kart.className='audit-kart'+(acik?' acik':'');
+        const head=document.createElement('div');head.className='audit-bas';
+        head.innerHTML='<span class="audit-ok">'+(acik?'&#9660;':'&#9654;')+'</span>'+
+          '<span class="audit-no">'+noHarita[a.id]+'. Audit</span>'+
+          '<span class="audit-tarih">'+uzunTarih(a.startDate)+' - '+uzunTarih(a.endDate)+'</span>'+
           '<span class="audit-ticket">Ticket: '+(a.ticketStart?esc(a.ticketStart):'?')+' - '+(a.ticketEnd?esc(a.ticketEnd):'?')+'</span>'+
-          '<span class="audit-kisi">Denetleyen: '+esc(denetleyenAdi(a))+'</span>';
-        kart.appendChild(ust);
-        auditBahisBlogu(kart,a,fotoHarita[a.id]||[]);
+          '<span class="audit-kisi">Denetleyen: '+esc(denetleyenAdi(a))+'</span>'+
+          '<span class="audit-bahis-say">'+bahisSay+' hatali bahis</span>';
+        head.onclick=()=>{const ac=kart.classList.toggle('acik'); if(ac)acikAuditSet.add(a.id); else acikAuditSet.delete(a.id);
+          head.querySelector('.audit-ok').innerHTML=ac?'&#9660;':'&#9654;';};
+        kart.appendChild(head);
+        const govde=document.createElement('div');govde.className='audit-govde';
+        auditBahisBlogu(govde,a,fotoHarita[a.id]||[]);
         const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
         const dz=document.createElement('button');dz.className='ikincil kucuk';dz.textContent='Duzenle';
-        dz.onclick=()=>{duzenlenenAudit=a.id;auditCiz();};alt.appendChild(dz);
+        dz.onclick=(e)=>{e.stopPropagation();duzenlenenAudit=a.id;auditCiz();};alt.appendChild(dz);
         if(a.createdBy===durum.uid||yoneticiMi()){
           const b=document.createElement('button');b.className='ikincil kucuk';b.textContent='Audit sil';
-          b.onclick=()=>auditSil(a.id,sube.name+' '+a.startDate);alt.appendChild(b);
+          b.onclick=(e)=>{e.stopPropagation();auditSil(a.id,sube.name+' '+a.startDate);};alt.appendChild(b);
         }
-        kart.appendChild(alt);
+        govde.appendChild(alt);
+        kart.appendChild(govde);
         grp.appendChild(kart);
       });
       el.appendChild(grp);
