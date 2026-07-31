@@ -280,6 +280,16 @@ body.ceza-modu .ceza-btn{display:block!important}
 .rapor-liste li{border-bottom:1px solid var(--renk-cizgi);padding-bottom:8px;font-size:14px}
 .rapor-liste li:last-child{border-bottom:none;padding-bottom:0}
 .rapor-tarih{font-weight:700}
+/* Aylik rapor duzeni */
+.rapor-ay-ozet{background:var(--renk-tint);border:1px solid var(--renk-cizgi);border-radius:10px;padding:12px 14px;margin-bottom:14px}
+.rapor-ay-ozet .ozet-baslik{font-weight:700;color:var(--renk-ana-koyu);margin:0 0 6px}
+.rapor-ay-ozet .ozet-satir{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px;align-items:center}
+.rapor-sube-ist{font-size:13px;color:var(--renk-soluk);margin:2px 0 8px}
+.rapor-bolum{margin-top:12px}
+.rapor-bolum-bas{font-weight:700;color:var(--renk-ana-koyu);font-size:14px;margin:0 0 6px;padding-bottom:3px;border-bottom:1px solid var(--renk-cizgi)}
+.rapor-audit-kart{border:1px solid var(--renk-cizgi);border-left:3px solid var(--renk-ana);border-radius:6px;padding:8px 10px;margin:6px 0;background:#fbfdfc}
+.rapor-audit-bas{font-size:13px;color:var(--renk-metin);margin-bottom:2px}
+.rapor-audit-no{display:inline-block;font-weight:700;color:#fff;background:var(--renk-ana);border-radius:6px;padding:1px 8px;font-size:12px;margin-right:6px}
 .rapor-etiket{display:inline-block;font-size:11px;font-weight:700;color:#fff;border-radius:10px;padding:1px 8px;margin:0 4px}
 .rapor-gorev{background:var(--renk-ana)}.rapor-kamera{background:var(--kamera)}.rapor-denetim{background:var(--amber)}
 </style>
@@ -2096,92 +2106,118 @@ async function raporCiz(){
     const kesisir=a=>((a.startDate||'')<=aySon)&&((a.endDate||'')>=ayBas);   // audit'in kapsadigi gunler bu aya deger mi
     const ayMi=t=>!!t&&String(t).slice(0,7)===ay;
     const ozetler=subeAuditOzetleri(audits);
+    const zmn=x=>(x&&x.seconds)||0;
     window._rG=[];   // rapor foto gruplari (lightbox icin)
-    // Personel hata sayaci (tum kaynaklar): {ad:{toplam,denetim,bahis,kamera}}
-    const perSay={};
-    const perEkle=(ad,tur,zarar,ceza)=>{if(!ad)return;if(!perSay[ad])perSay[ad]={toplam:0,zarar:0,ceza:0,denetim:0,bahis:0,kamera:0};perSay[ad].toplam++;perSay[ad][tur]++;perSay[ad].zarar+=Number(zarar)||0;perSay[ad].ceza+=Number(ceza)||0;};
+    // Ay geneli GERCEK toplam: her kayit BIR KEZ (zarar/geri), ceza=tum kisiler toplami.
+    const T={denetimGun:0,bahis:0,kamera:0,zarar:0,geri:0,ceza:0};
     let html='';
     durum.subeler.forEach(sube=>{
-      const list=audits.filter(a=>a.branchId===sube.id&&kesisir(a))
-        .sort((a,b)=>String(a.startDate).localeCompare(String(b.startDate)));
+      // Audit numaralari: kronolojik (tum aylar, en eski = 1. Audit) -> raporda tutarli numara
+      const listAll=audits.filter(a=>a.branchId===sube.id);
+      const krono=listAll.slice().sort((a,b)=>String(a.startDate||a.endDate||'').localeCompare(String(b.startDate||b.endDate||''))||(zmn(a.createdAt)-zmn(b.createdAt)));
+      const noHarita={}; krono.forEach((a,i)=>{noHarita[a.id]=i+1;});
+      const list=listAll.filter(kesisir).sort((a,b)=>String(a.startDate).localeCompare(String(b.startDate)));
       const kamera=kasalar.filter(o=>o.branchId===sube.id&&ayMi(kameraTarihi(o)))
         .sort((a,b)=>String(kameraTarihi(a)).localeCompare(String(kameraTarihi(b))));
       const denetimler=denetimlerHepsi.filter(k=>k.branchId===sube.id&&ayMi(k.date))
         .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
       const ozet=ozetler.find(o=>o.sube.id===sube.id);
-      html+='<div class="pano-kart"><h3 style="margin-top:0">'+esc(sube.name)+'</h3>';
-      if(ozet&&!ozet.yok){
-        const bek=ozet.bekleyen==null?'':(ozet.bekleyen===0?'bugun denetlendi':(ozet.bekleyen+' gundur bekliyor'));
-        html+='<p class="mini-not">En son denetlenen gun: <b>'+uzunTarih(ozet.sonTarih)+'</b>'+(bek?' &middot; '+bek:'')+
-          ' &middot; Son ticket: <b>'+(ozet.sonTicket?esc(ozet.sonTicket):'-')+'</b></p>';
-      } else {
-        html+='<p class="mini-not">Bu subede hic audit kaydi yok.</p>';
-      }
-      // ---- GUNLUK DENETIMLER (her gun ayri tarih) ----
-      html+='<p class="mini-not" style="margin-top:10px"><b>Gunluk denetimler:</b></p>';
-      if(!denetimler.length){
-        html+='<p class="bos-satir">Bu ay gunluk denetim kaydi yok.</p>';
-      } else {
-        html+='<ul class="rapor-liste">';
+      let sZarar=0,sGeri=0,sCeza=0,sBahis=0;   // sube ay istatistigi
+
+      // ---- 1) GUNLUK DENETIMLER ----
+      let denHtml='';
+      if(!denetimler.length){ denHtml='<p class="bos-satir">Bu ay gunluk denetim kaydi yok.</p>'; }
+      else{
+        denHtml='<ul class="rapor-liste">';
         denetimler.forEach(k=>{
           const yy=denetimYanlislar(k);
-          yy.forEach(x=>{if(x.personel)perEkle(x.personel,'denetim',x.zarar,x.ceza);});
-          html+='<li><span class="rapor-tarih">'+uzunTarih(k.date)+'</span> - gunluk denetim yapildi';
-          if(!yy.length){
-            html+=' <span class="rapor-dogru">(hepsi dogru)</span>';
-          } else {
-            html+=' <span class="rapor-yanlis">('+yy.length+' hata tespit edildi)</span><ul class="rapor-liste" style="margin:4px 0 4px 12px">';
-            yy.forEach(x=>{html+='<li><b>'+esc(x.label)+'</b>'+(x.aciklama?' - '+esc(x.aciklama):'')+
-              (x.personel?'<span class="personel-rozet">'+esc(x.personel)+'</span>':'')+
-              tutarRozet(x.zarar)+(x.ceza?'<span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+'</li>';});
-            html+='</ul>';
+          denHtml+='<li><span class="rapor-tarih">'+uzunTarih(k.date)+'</span> - gunluk denetim yapildi';
+          if(!yy.length){ denHtml+=' <span class="rapor-dogru">(hepsi dogru)</span>'; }
+          else{
+            denHtml+=' <span class="rapor-yanlis">('+yy.length+' hata)</span><ul class="rapor-liste" style="margin:4px 0 4px 12px">';
+            yy.forEach(x=>{ sZarar+=Number(x.zarar)||0; sCeza+=Number(x.ceza)||0; T.zarar+=Number(x.zarar)||0; T.ceza+=Number(x.ceza)||0;
+              denHtml+='<li><b>'+esc(x.label)+'</b>'+(x.aciklama?' - '+esc(x.aciklama):'')+
+                (x.personel?'<span class="personel-rozet">'+esc(x.personel)+'</span>':'')+
+                tutarRozet(x.zarar)+(x.ceza?'<span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+'</li>';});
+            denHtml+='</ul>';
           }
-          html+='</li>';
+          denHtml+='</li>';
         });
-        html+='</ul>';
+        denHtml+='</ul>';
+        T.denetimGun+=denetimler.length;
       }
-      // ---- AUDIT (SUBE DENETIMLERI) ----
-      if(!list.length){
-        html+='<p class="mini-not" style="margin-top:10px"><b>Audit:</b></p><p class="bos-satir">Bu ay bu subede audit yok.</p>';
-      } else {
-        html+='<p class="mini-not" style="margin-top:10px"><b>Audit (hatali bahisler):</b></p>';
+
+      // ---- 2) AUDIT DENETIMLERI (numarali ayri kartlar) ----
+      let audHtml='';
+      if(!list.length){ audHtml='<p class="bos-satir">Bu ay audit yok.</p>'; }
+      else{
         list.forEach(a=>{
           const bahisler=auditBahisleri(a,fotoHarita[a.id]||[]);
-          bahisler.forEach(b=>{(b.kisiler||[]).forEach(k=>{if(k.ad)perEkle(k.ad,'bahis',(k.zararli?b.zarar:0),k.ceza);});});
-          html+='<div class="rapor-bahis"><b>'+uzunTarih(a.startDate)+' - '+uzunTarih(a.endDate)+'</b>'+
+          sBahis+=bahisler.length; T.bahis+=bahisler.length;
+          audHtml+='<div class="rapor-audit-kart"><div class="rapor-audit-bas"><span class="rapor-audit-no">'+noHarita[a.id]+'. Audit</span>'+
+            '<b>'+uzunTarih(a.startDate)+' - '+uzunTarih(a.endDate)+'</b>'+
             ' &middot; Ticket: '+(a.ticketStart?esc(a.ticketStart):'?')+' - '+(a.ticketEnd?esc(a.ticketEnd):'?')+
             ' &middot; Denetleyen: '+esc(denetleyenAdi(a))+
-            ' &middot; Hatali bahis: '+bahisler.length;
-          bahisler.forEach(b=>{const resimler=b.fotolar.map(f=>f.dataUrl);
+            ' &middot; '+bahisler.length+' hatali bahis</div>';
+          if(!bahisler.length){ audHtml+='<p class="mini-not" style="margin:2px 0">Hatali bahis bulunmadi.</p>'; }
+          bahisler.forEach(b=>{
+            sZarar+=Number(b.zarar)||0; sGeri+=Number(b.geriAlinan)||0; T.zarar+=Number(b.zarar)||0; T.geri+=Number(b.geriAlinan)||0;
+            (b.kisiler||[]).forEach(k=>{ sCeza+=Number(k.ceza)||0; T.ceza+=Number(k.ceza)||0; });
+            const resimler=b.fotolar.map(f=>f.dataUrl);
             const gi=window._rG.push(resimler)-1;
             const kr=(b.kisiler||[]).map(k=>'<span class="personel-rozet">'+esc(k.ad)+(k.ceza?(' '+saat(k.ceza)):'')+(k.zararli?' &#9679;':'')+'</span>').join('');
-            html+='<div class="rapor-bahis-ic"><span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span> '+esc(b.aciklama||'')+
+            audHtml+='<div class="rapor-bahis-ic"><span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span> '+esc(b.aciklama||'')+
               kr+tutarRozet(b.zarar)+
               ((b.geriAlinan&&b.zarar>0&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':((b.zarar>0&&b.geriAlinan)?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+'<div class="foto-galeri">';
-            b.fotolar.forEach((f,idx)=>{html+='<img class="foto-kucuk" src="'+esc(f.dataUrl||'')+'" alt="foto" onclick="lightboxAc(window._rG['+gi+'],'+idx+')">';});
-            html+='</div></div>';});
-          html+='</div>';
+            b.fotolar.forEach((f,idx)=>{audHtml+='<img class="foto-kucuk" src="'+esc(f.dataUrl||'')+'" alt="foto" onclick="lightboxAc(window._rG['+gi+'],'+idx+')">';});
+            audHtml+='</div></div>';
+          });
+          audHtml+='</div>';
         });
       }
-      // ---- KAMERA INCELEMELERI ----
-      if(kamera.length){
-        kamera.forEach(o=>{if(o.personel)perEkle(o.personel,'kamera',o.zarar,o.ceza);});
-        html+='<p class="mini-not" style="margin-top:10px"><b>Kamera incelemeleri:</b></p><ul class="rapor-liste">';
-        kamera.forEach(o=>{const durumK=o.resolved?'cozuldu':(o.cameraChecked?'incelendi':'henuz incelenmedi');
+
+      // ---- 3) KAMERA INCELEMELERI ----
+      let kamHtml='';
+      if(!kamera.length){ kamHtml='<p class="bos-satir">Bu ay kamera incelemesi yok.</p>'; }
+      else{
+        kamHtml='<ul class="rapor-liste">';
+        kamera.forEach(o=>{
+          sZarar+=Number(o.zarar)||0; sGeri+=Number(o.geriAlinan)||0; sCeza+=Number(o.ceza)||0;
+          T.zarar+=Number(o.zarar)||0; T.geri+=Number(o.geriAlinan)||0; T.ceza+=Number(o.ceza)||0; T.kamera++;
+          const durumK=o.resolved?'cozuldu':(o.cameraChecked?'incelendi':'henuz incelenmedi');
           const bulguK=o.finding?(' - bulgu: '+esc(o.finding)):((o.cameraChecked||o.resolved)?' - bulgu yok':'');
-          html+='<li><span class="rapor-tarih">'+(kameraTarihi(o)?uzunTarih(kameraTarihi(o)):'-')+'</span> '+
+          kamHtml+='<li><span class="rapor-tarih">'+(kameraTarihi(o)?uzunTarih(kameraTarihi(o)):'-')+'</span> '+
             esc(o.amount)+' '+(YON_ETIKET[o.direction]||'')+' - <b>'+durumK+'</b>'+bulguK+
             (o.personel?'<span class="personel-rozet">'+esc(o.personel)+'</span>':'')+
             tutarRozet(o.zarar)+(o.ceza?'<span class="ceza-rozet">'+saat(o.ceza)+'</span>':'')+
             ((o.zarar>0&&o.geriAlinan&&o.geriAlinan>=o.zarar)?'<span class="geri-rozet">geri alindi</span>':((o.zarar>0&&o.geriAlinan)?'<span class="geri-rozet">geri: '+tl(o.geriAlinan)+'</span>':''))+
-            ' <span class="mini-not">(inceleyen: '+esc(atananAdlari(o))+')</span></li>';});
-        html+='</ul>';
+            ' <span class="mini-not">(inceleyen: '+esc(atananAdlari(o))+')</span></li>';
+        });
+        kamHtml+='</ul>';
       }
-      html+='</div>';
+
+      // ---- SUBE KARTI (durum + istatistik + 3 bolum) ----
+      const bek=(ozet&&!ozet.yok)?(ozet.bekleyen==null?'':(ozet.bekleyen===0?'bugun denetlendi':(ozet.bekleyen+' gundur bekliyor'))):'';
+      const durumSatiri=(ozet&&!ozet.yok)
+        ? 'En son denetlenen gun: <b>'+uzunTarih(ozet.sonTarih)+'</b>'+(bek?' &middot; '+bek:'')+' &middot; Son ticket: <b>'+(ozet.sonTicket?esc(ozet.sonTicket):'-')+'</b>'
+        : 'Bu subede hic audit kaydi yok.';
+      const sNet=sZarar-sGeri;
+      const istSatiri='<div class="rapor-sube-ist">Bu ay: <b>'+denetimler.length+'</b> denetim gunu &middot; <b>'+sBahis+'</b> hatali bahis &middot; <b>'+kamera.length+'</b> kamera &nbsp;|&nbsp; '+
+        'Zarar <b class="'+tutarSinif(sZarar)+'">'+tl(sZarar)+'</b> &middot; Geri <b>'+tl(sGeri)+'</b> &middot; Net <b class="'+tutarSinif(sNet)+'">'+tl(sNet)+'</b>'+(sNet<0?' (KAR)':'')+(sCeza?' &middot; Ceza <b>'+saat(sCeza)+'</b>':'')+'</div>';
+      html+='<div class="pano-kart"><h3 style="margin-top:0">'+esc(sube.name)+'</h3>'+
+        '<p class="mini-not">'+durumSatiri+'</p>'+istSatiri+
+        '<div class="rapor-bolum"><p class="rapor-bolum-bas">1) Gunluk denetimler</p>'+denHtml+'</div>'+
+        '<div class="rapor-bolum"><p class="rapor-bolum-bas">2) Audit denetimleri</p>'+audHtml+'</div>'+
+        '<div class="rapor-bolum"><p class="rapor-bolum-bas">3) Kamera incelemeleri</p>'+kamHtml+'</div>'+
+        '</div>';
     });
-    // NOT: Personel Hata Ozeti kaldirildi (ayni bilgi Personel Karnesi sekmesinde var).
-    const ustHtml='<p class="mini-not">Ay: '+esc(ay)+' &mdash; sube bazinda denetimler ve kamera. (Personel bazli ozet icin Personel Karnesi sekmesi.)</p>';
-    el.innerHTML=ustHtml+html;
+    // ---- AY OZETI (en uste) ----
+    const net=T.zarar-T.geri;
+    const ozetKutu='<div class="rapor-ay-ozet"><p class="ozet-baslik">Ay ozeti &mdash; '+esc(ay)+'</p>'+
+      '<div class="ozet-satir"><span><b>'+T.denetimGun+'</b> gunluk denetim</span><span><b>'+T.bahis+'</b> hatali bahis</span><span><b>'+T.kamera+'</b> kamera incelemesi</span></div>'+
+      '<div class="ozet-satir" style="margin-top:6px">Zarar: <b class="'+tutarSinif(T.zarar)+'">'+tl(T.zarar)+'</b> &middot; Geri alinan: <b>'+tl(T.geri)+'</b> &middot; Net: <b class="'+tutarSinif(net)+'">'+tl(net)+'</b>'+(net<0?' (KAR)':'')+' &middot; Toplam ceza: <b>'+saat(T.ceza)+'</b></div>'+
+      '<p class="mini-not" style="margin:6px 0 0">Rakamlar sube bazinda sirket toplamidir. Personel bazli dagilim icin <b>Personel Karnesi</b> sekmesi.</p></div>';
+    el.innerHTML=ozetKutu+html;
   }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Rapor yuklenemedi.</p>';}
 }
 
@@ -2407,6 +2443,15 @@ function yaziciStil(genis){
   '.rapor-tarih{font-weight:700}'+
   '.rapor-bahis{margin:6px 0;padding:6px 8px;border:1px solid #e2e8e4;border-radius:6px;page-break-inside:avoid}'+
   '.rapor-bahis-ic{margin:4px 0 4px 10px;padding:4px 8px;border-left:3px solid #cbd5e1}'+
+  '.rapor-ay-ozet{background:#e6f4f1;border:1px solid #d9e2df;border-radius:8px;padding:10px 12px;margin:0 0 12px}'+
+  '.rapor-ay-ozet .ozet-baslik{font-weight:700;color:#0f766e;margin:0 0 4px;font-size:13px}'+
+  '.rapor-ay-ozet .ozet-satir{font-size:12px}'+
+  '.rapor-sube-ist{font-size:11px;color:#64748b;margin:2px 0 6px}'+
+  '.rapor-bolum{margin-top:10px}'+
+  '.rapor-bolum-bas{font-weight:700;color:#0f766e;font-size:12.5px;margin:0 0 4px;padding-bottom:2px;border-bottom:1px solid #d9e2df}'+
+  '.rapor-audit-kart{border:1px solid #e2e8e4;border-left:3px solid #0f766e;border-radius:6px;padding:6px 8px;margin:5px 0;page-break-inside:avoid}'+
+  '.rapor-audit-bas{font-size:12px;color:#334155;margin-bottom:2px}'+
+  '.rapor-audit-no{display:inline-block;font-weight:700;color:#fff;background:#0f766e;border-radius:5px;padding:1px 7px;font-size:11px;margin-right:5px}'+
   '.bahis-tik{font-weight:700;color:#0f766e}'+
   '.foto-galeri{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}'+
   '.foto-kucuk{height:90px;width:auto;border:1px solid #cbd5e1;border-radius:4px;object-fit:cover}'+
