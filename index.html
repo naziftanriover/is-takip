@@ -581,9 +581,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
-// Yerel onbellek (IndexedDB): tekrar acilislar ve zayif baglantida hiz + cevrimdisi dayaniklilik.
-// Desteklenmeyen tarayici / birden fazla sekme durumunda sessizce gecilir.
-try{ db.enablePersistence({synchronizeTabs:true}).catch(()=>{}); }catch(e){}
 const SUNUCU_ZAMAN = () => firebase.firestore.FieldValue.serverTimestamp();
 
 // ================== SABITLER ==================
