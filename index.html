@@ -1293,7 +1293,7 @@ function denetimBaslat(){
     }catch(err){console.error(err);h.textContent='Kayit eklenemedi. Tekrar deneyin.';}
     finally{btn.disabled=false;}
   };
-  denetimCiz();
+  // ACILIS HIZI: denetimCiz() burada CAGRILMAZ; sekme acilinca render edilir. Sadece form kurulur.
 }
 // Eski (checks:boolean) ve yeni (items:{durum,aciklama,personel}) kayitlari normalize eder.
 function denetimMaddeleri(k){
@@ -1413,7 +1413,7 @@ function gorevBaslat(){
     }catch(err){console.error(err);h.textContent='Gorev eklenemedi. Tekrar deneyin.';}
     finally{btn.disabled=false;}
   };
-  gorevCiz();
+  // ACILIS HIZI: gorevCiz() burada CAGRILMAZ (fotograflari ceker); sekme acilinca render edilir.
 }
 async function gorevDurum(id,yeni){
   try{await db.collection('tasks').doc(id).update({status:yeni});
@@ -1966,7 +1966,7 @@ function auditBaslat(){
     }catch(err){console.error(err);h.textContent='Audit eklenemedi. Tekrar deneyin.';}
     finally{btn.disabled=false;}
   };
-  auditCiz();
+  // ACILIS HIZI: auditCiz() burada CAGRILMAZ (fotograflari ceker); sekme acilinca render edilir.
 }
 async function auditCiz(){
   const el=$('aListe');
@@ -2600,7 +2600,7 @@ function kasaBaslat(){
     }catch(err){console.error(err);h.textContent='Kayit eklenemedi. Tekrar deneyin.';}
     finally{btn.disabled=false;}
   };
-  kasaCiz();
+  // ACILIS HIZI: kasaCiz() burada CAGRILMAZ; sekme acilinca render edilir.
 }
 async function kasaCozum(id,cozuldu){
   try{await db.collection('cashEvents').doc(id).update({resolved:cozuldu});
