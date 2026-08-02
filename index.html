@@ -2421,7 +2421,7 @@ async function karneCiz(){
 // Tum hatalari (gunluk denetim yanlislari + hatali bahisler + kamera) kaynak referansiyla toplar.
 async function cezaKalemleriGetir(scope){
   const [audits,fotoHarita,kasaSnap,denetimSnap]=await Promise.all([
-    auditleriGetir(), auditFotoHaritasi(),
+    auditleriGetir(), Promise.resolve({}),   // Ceza sekmesi resim GOSTERMEZ -> foto CEKILMEZ (tembel/hafif)
     db.collection('cashEvents').get(), db.collection('dailyAudits').get()
   ]);
   const kasalar=kasaSnap.docs.map(d=>({id:d.id,...d.data()}));
