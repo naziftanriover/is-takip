@@ -581,6 +581,9 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+// Yerel onbellek (IndexedDB): tekrar acilislar ve zayif baglantida hiz + cevrimdisi dayaniklilik.
+// Desteklenmeyen tarayici / birden fazla sekme durumunda sessizce gecilir.
+try{ db.enablePersistence({synchronizeTabs:true}).catch(()=>{}); }catch(e){}
 const SUNUCU_ZAMAN = () => firebase.firestore.FieldValue.serverTimestamp();
 
 // ================== SABITLER ==================
@@ -917,7 +920,7 @@ async function panoCiz(){
   }catch(err){console.error(err);$('panoAudit').innerHTML='<p class="bos-satir">Audit durumu yuklenemedi.</p>';}
   // Bu ay en cok zarar veren personel (ilk 5)
   try{
-    const liste=(await karneTopla({tum:false,ay:ayBugun()})).slice(0,5);
+    const liste=(await karneTopla({tum:false,ay:ayBugun()},{fotosuz:true})).slice(0,5);
     const pe=$('panoPersonel');
     if(!liste.length){ pe.innerHTML='<p class="bos-satir">Bu ay personele bagli hata yok.</p>'; }
     else{ let h='<ul class="rapor-liste rapor-personel">';
@@ -2224,9 +2227,12 @@ async function raporCiz(){
 // ================== PERSONEL KARNESI ==================
 // Tum kaynaklardan (gunluk denetim yanlislari + audit hatali bahisler + kamera) personel bazli
 // hata sayisi ve TL zarari toplar. scope: {tum:bool, ay:'YYYY-AA'}
-async function karneTopla(scope){
+async function karneTopla(scope,opt){
+  opt=opt||{};
+  // opt.fotosuz: fotograflari (base64, agir) CEKME -> dashboard gibi resim gostermeyen yerlerde hiz icin.
   const [audits,fotoHarita,kasaSnap,denetimSnap]=await Promise.all([
-    auditleriGetir(), auditFotoHaritasi(),
+    auditleriGetir(),
+    opt.fotosuz?Promise.resolve({}):auditFotoHaritasi(),
     db.collection('cashEvents').get(), db.collection('dailyAudits').get()
   ]);
   const kasalar=kasaSnap.docs.map(d=>({id:d.id,...d.data()}));
