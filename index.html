@@ -1826,10 +1826,10 @@ function auditBahisBlogu(kutu,audit,fotolar){
         kisiRozet+
         tutarRozet(b.zarar)+
         ((b.zarar>0&&b.geriAlinan&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':((b.zarar>0&&b.geriAlinan)?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+
-        '<span class="bahis-say">'+resimler.length+' resim</span>';
+        '<span class="bahis-say" data-foto-say>&#128247;</span>';
       const bgov=document.createElement('div');bgov.className='bahis-govde';
-      b.fotolar.forEach((f,idx)=>{const im=document.createElement('img');im.src=f.dataUrl;im.className='foto-kucuk';im.alt='hatali odeme';
-        im.onclick=(e)=>{e.stopPropagation();lightboxAc(resimler,idx);};bgov.appendChild(im);});
+      const bfoto=document.createElement('div');bfoto.className='foto-galeri';bgov.appendChild(bfoto);   // resimler bahis acilinca TEMBEL iner
+      let fotoYuklendi=false;
       // ---- Suclu personel(ler) ----
       if(kisiler.length){const kd=document.createElement('div');kd.className='mini-not';kd.style.margin='4px 0';
         kd.innerHTML='<b>Suclu personel:</b> '+kisiler.map(k=>esc(k.ad)+(k.ceza?(' ('+saat(k.ceza)+' ceza)'):'')+(k.zararli?' - zarar bu kisiye':'')).join(' &middot; ');
@@ -1872,7 +1872,13 @@ function auditBahisBlogu(kutu,audit,fotolar){
       if(audit.createdBy===durum.uid||yoneticiMi()){const sb=document.createElement('button');sb.type='button';sb.className='ikincil kucuk';sb.textContent='Bahis sil';
         sb.onclick=(e)=>{e.stopPropagation();auditBahisSil(audit.id,b.bahisId,b.ticketNo);};arac.appendChild(sb);}
       bgov.appendChild(arac);
-      bbas.onclick=()=>{bo.classList.toggle('acik');bbas.querySelector('.bahis-ok').innerHTML=bo.classList.contains('acik')?'&#9660;':'&#9654;';};
+      bbas.onclick=async()=>{const acildi=bo.classList.toggle('acik');bbas.querySelector('.bahis-ok').innerHTML=acildi?'&#9660;':'&#9654;';
+        if(acildi&&!fotoYuklendi){ fotoYuklendi=true; bfoto.innerHTML='<span class="mini-not">Fotograflar yukleniyor...</span>';
+          try{ const snap=await db.collection('photos').where('auditId','==',audit.id).where('bahisId','==',b.bahisId).get();
+            const resimlerL=snap.docs.map(d=>d.data().dataUrl).filter(Boolean); bfoto.innerHTML='';
+            resimlerL.forEach((durl,idx)=>{const im=document.createElement('img');im.src=durl;im.className='foto-kucuk';im.alt='hatali odeme';im.onclick=(e)=>{e.stopPropagation();lightboxAc(resimlerL,idx);};bfoto.appendChild(im);});
+            const say=bbas.querySelector('[data-foto-say]'); if(say) say.textContent=resimlerL.length?(resimlerL.length+' resim'):'resim yok';
+          }catch(err){console.error(err);bfoto.innerHTML='<span class="mini-not">Fotograflar yuklenemedi.</span>';fotoYuklendi=false;} } };
       bo.appendChild(bbas);bo.appendChild(bgov);bl.appendChild(bo);});
     kutu.appendChild(bl);}
   // yeni hatali bahis ekleme (foto sart degil) - VARSAYILAN KAPALI; "+ Hatali bahis ekle" ile acilir
@@ -1971,7 +1977,7 @@ function auditBaslat(){
 async function auditCiz(){
   const el=$('aListe');
   try{
-    const [audits,fotoHarita]=await Promise.all([auditleriGetir(),auditFotoHaritasi()]);
+    const audits=await auditleriGetir();   // TEMBEL YUKLEME: fotograflar burada CEKILMEZ; her bahis acilinca kendi resmi iner
     $('auditOzet').innerHTML=auditOzetTabloHTML(audits);
     if(!audits.length){el.innerHTML='<p class="bos-satir">Henuz audit kaydi yok.</p>';return;}
     el.innerHTML='';
@@ -1990,7 +1996,7 @@ async function auditCiz(){
       const bas=document.createElement('h3');bas.className='audit-sube-bas';bas.textContent=sube.name+' ('+goster.length+' audit)';grp.appendChild(bas);
       goster.forEach(a=>{
         if(a.id===duzenlenenAudit){ grp.appendChild(auditDuzenleFormu(a)); return; }
-        const bahisSay=auditBahisleri(a,fotoHarita[a.id]||[]).length;
+        const bahisSay=auditBahisleri(a,[]).length;
         const acik=acikAuditSet.has(a.id);
         const kart=document.createElement('div');kart.className='audit-kart'+(acik?' acik':'');
         const head=document.createElement('div');head.className='audit-bas';
@@ -2005,7 +2011,7 @@ async function auditCiz(){
           head.querySelector('.audit-ok').innerHTML=ac?'&#9660;':'&#9654;';};
         kart.appendChild(head);
         const govde=document.createElement('div');govde.className='audit-govde';
-        auditBahisBlogu(govde,a,fotoHarita[a.id]||[]);
+        auditBahisBlogu(govde,a,[]);
         const alt=document.createElement('div');alt.className='kayit-alt satir-arac';
         const dz=document.createElement('button');dz.className='ikincil kucuk';dz.textContent='Duzenle';
         dz.onclick=(e)=>{e.stopPropagation();duzenlenenAudit=a.id;auditCiz();};alt.appendChild(dz);
@@ -2023,6 +2029,29 @@ async function auditCiz(){
   }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Audit kayitlari yuklenemedi.</p>';}
 }
 
+// Bir gorevin (task) fotograflarindan hatali bahisleri + resimleri cizer (gorev acilinca lazy cagrilir).
+function gorevBahisKutuCiz(kutu,fotolar,bitti){
+  kutu.innerHTML='';
+  const bahisler=bahisleriGrupla(fotolar);
+  const say=document.createElement('div');say.className='kayit-alt';
+  say.innerHTML='<b>Hatali odeme (bahis): '+bahisler.length+'</b>'+(bitti?' - Gorev bitti':'');
+  kutu.appendChild(say);
+  if(bahisler.length){const bl=document.createElement('ul');bl.className='bahis-liste';
+    bahisler.forEach(b=>{const resimler=b.fotolar.map(f=>f.dataUrl);
+      const bo=document.createElement('li');bo.className='bahis-oge';
+      const bbas=document.createElement('div');bbas.className='bahis-bas';
+      bbas.innerHTML='<span class="bahis-ok">&#9654;</span>'+
+        '<span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span>'+
+        '<span class="bahis-ack">'+esc(b.aciklama||'')+'</span>'+
+        '<span class="bahis-say">'+resimler.length+' resim</span>';
+      const bgov=document.createElement('div');bgov.className='bahis-govde';
+      b.fotolar.forEach((f,idx)=>{const im=document.createElement('img');im.src=f.dataUrl;im.className='foto-kucuk';im.alt='hatali odeme';
+        im.onclick=(e)=>{e.stopPropagation();lightboxAc(resimler,idx);};bgov.appendChild(im);});
+      bbas.onclick=()=>{bo.classList.toggle('acik');bbas.querySelector('.bahis-ok').innerHTML=bo.classList.contains('acik')?'&#9660;':'&#9654;';};
+      bo.appendChild(bbas);bo.appendChild(bgov);bl.appendChild(bo);});
+    kutu.appendChild(bl);}
+}
+
 async function gorevCiz(){
   const u=$('gListe');
   try{
@@ -2030,14 +2059,14 @@ async function gorevCiz(){
       db.collection('tasks').orderBy('createdAt','desc').limit(50).get(),
       db.collection('cashEvents').orderBy('date','desc').limit(50).get()
     ]);
-    const fotoHarita=await gorevFotoHaritasi();
+    // TEMBEL YUKLEME: gorev fotograflari burada CEKILMEZ; her gorev acilinca kendi fotolari iner
     // AY FILTRESI: kamera tarihine gore; tarihsiz gorevler her ay gorunur
     const kameralar=kSnap.docs.map(d=>({id:d.id,...d.data()})).filter(o=>ayUygun(kameraTarihi(o)||o.date));
     const kamListe=kameralar.slice().sort((a,b)=>(a.resolved?1:0)-(b.resolved?1:0));   // devam edenler once, cozulenler silinmez
     const gorevDocs=s.docs.filter(doc=>{const gt=gorevTarihi(doc.data());return !gt||ayUygun(gt);});
     u.innerHTML='';
     if(!gorevDocs.length && !kamListe.length){u.innerHTML='<li class="bos-satir">Bu ayda gorev veya kamera kaydi yok.</li>';return;}
-    gorevDocs.forEach(doc=>{const g=doc.data();const id=doc.id;const fotolar=fotoHarita[id]||[];
+    gorevDocs.forEach(doc=>{const g=doc.data();const id=doc.id;
       if(id===duzenlenenGorev){ u.appendChild(gorevDuzenleFormu(id,g)); return; }
       const li=document.createElement('li');li.className='kayit-satiri gorev-kart';
       const bitti=g.status==='done';
@@ -2051,31 +2080,20 @@ async function gorevCiz(){
       if(!saltOkunurMu()&&!cezaModuMu()){const gb=document.createElement('button');gb.className='ikincil kucuk';gb.textContent=bitti?'Geri ac':'Gorev bitti';
         gb.onclick=(e)=>{e.stopPropagation();gorevDurum(id,bitti?'todo':'done');};sag.appendChild(gb);}
       head.appendChild(sag);
-      head.onclick=()=>{li.classList.toggle('acik');head.querySelector('.gorev-ok').innerHTML=li.classList.contains('acik')?'&#9660;':'&#9654;';};
       li.appendChild(head);
       // --- govde (varsayilan kapali) ---
       const govde=document.createElement('div');govde.className='gorev-govde';
       const det=document.createElement('div');det.className='kayit-detay';
       det.textContent='Atananlar: '+atananAdlari(g)+(gorevTarihi(g)?' - Gorev tarihi: '+gorevTarihi(g):'');
-      const bahisler=bahisleriGrupla(fotolar);
-      const say=document.createElement('div');say.className='kayit-alt';
-      say.innerHTML='<b>Hatali odeme (bahis): '+bahisler.length+'</b>'+(bitti?' - Gorev bitti':'');
-      govde.appendChild(det);govde.appendChild(say);
-      if(bahisler.length){const bl=document.createElement('ul');bl.className='bahis-liste';
-        bahisler.forEach(b=>{const resimler=b.fotolar.map(f=>f.dataUrl);
-          const bo=document.createElement('li');bo.className='bahis-oge';
-          const bbas=document.createElement('div');bbas.className='bahis-bas';
-          bbas.innerHTML='<span class="bahis-ok">&#9654;</span>'+
-            '<span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span>'+
-            '<span class="bahis-ack">'+esc(b.aciklama||'')+'</span>'+
-            '<span class="bahis-say">'+resimler.length+' resim</span>';
-          const bgov=document.createElement('div');bgov.className='bahis-govde';
-          b.fotolar.forEach((f,idx)=>{const im=document.createElement('img');im.src=f.dataUrl;im.className='foto-kucuk';im.alt='hatali odeme';
-            im.onclick=(e)=>{e.stopPropagation();lightboxAc(resimler,idx);};bgov.appendChild(im);});
-          bbas.onclick=()=>{bo.classList.toggle('acik');
-            bbas.querySelector('.bahis-ok').innerHTML=bo.classList.contains('acik')?'&#9660;':'&#9654;';};
-          bo.appendChild(bbas);bo.appendChild(bgov);bl.appendChild(bo);});
-        govde.appendChild(bl);}
+      const bahisKutu=document.createElement('div');   // hatali bahisler + resimler: gorev ACILINCA lazy iner
+      govde.appendChild(det);govde.appendChild(bahisKutu);
+      // TEMBEL YUKLEME: gorev acilinca SADECE bu gorevin fotograflari iner
+      let gFotoYuklendi=false;
+      head.onclick=async()=>{const acildi=li.classList.toggle('acik');head.querySelector('.gorev-ok').innerHTML=acildi?'&#9660;':'&#9654;';
+        if(acildi&&!gFotoYuklendi){gFotoYuklendi=true;bahisKutu.innerHTML='<div class="kayit-alt mini-not">Yukleniyor...</div>';
+          try{const snap=await db.collection('photos').where('auditId','==',id).get();
+            gorevBahisKutuCiz(bahisKutu,snap.docs.map(d=>({id:d.id,...d.data()})),bitti);
+          }catch(err){console.error(err);bahisKutu.innerHTML='<div class="kayit-alt mini-not">Yuklenemedi.</div>';gFotoYuklendi=false;}}};
       const yuk=document.createElement('div');yuk.className='foto-yuk';
       const tik=document.createElement('input');tik.type='text';tik.className='foto-not';tik.placeholder='Ticket no (or. 30746)';tik.maxLength=40;tik.style.flex='0 1 150px';
       const not=document.createElement('input');not.type='text';not.className='foto-not';
