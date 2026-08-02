@@ -2320,7 +2320,8 @@ async function karneTopla(scope,opt){
     p.toplam++; p.zarar+=z; p.ceza+=c; p.geriAlinan+=ga; p[kaynak].say++; p[kaynak].zarar+=z; p[kaynak].ceza+=c;
     if(tarih&&String(tarih)>String(p.sonTarih)) p.sonTarih=String(tarih);
     p.hatalar.push({kaynak:kaynak,kaynakAd:KAYNAK_AD[kaynak]||kaynak,tarih:tarih||'',zarar:z,ceza:c,geriAlinan:ga,
-      sube:(detay&&detay.sube)||'',baslik:(detay&&detay.baslik)||'',aciklama:(detay&&detay.aciklama)||'',fotolar:(detay&&detay.fotolar)||[],odemeler:(detay&&detay.odemeler)||[]}); };
+      sube:(detay&&detay.sube)||'',baslik:(detay&&detay.baslik)||'',aciklama:(detay&&detay.aciklama)||'',fotolar:(detay&&detay.fotolar)||[],odemeler:(detay&&detay.odemeler)||[],
+      auditId:(detay&&detay.auditId)||'',bahisId:(detay&&detay.bahisId)||''}); };   // auditId+bahisId -> karne drill-down'da foto TEMBEL iner
   // gunluk denetim yanlislari
   denetimler.forEach(k=>{ if(!uyar(k.date))return; denetimYanlislar(k).forEach(x=>{ if(x.personel){ ozet.zarar+=Number(x.zarar)||0; ekle(x.personel,'denetim',k.date,x.zarar,x.ceza,
     {sube:subeAdi(k.branchId),baslik:x.label,aciklama:x.aciklama,fotolar:[]}); } }); });
@@ -2332,7 +2333,7 @@ async function karneTopla(scope,opt){
       (b.kisiler||[]).forEach(k=>{ if(!k.ad)return;
       const kz=k.zararli?(Number(b.zarar)||0):0; const kg=k.zararli?(Number(b.geriAlinan)||0):0;
       ekle(k.ad,'bahis',t,kz,k.ceza,
-        {sube:subeAdi(a.branchId),baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama,fotolar:b.fotolar.map(f=>f.dataUrl),odemeler:(k.zararli?bahisOdemeler(b):[])},kg); }); }); });
+        {sube:subeAdi(a.branchId),baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama,fotolar:b.fotolar.map(f=>f.dataUrl),odemeler:(k.zararli?bahisOdemeler(b):[]),auditId:a.id,bahisId:b.bahisId},kg); }); }); });
   // kamera / kasa
   kasalar.forEach(o=>{ const t=kameraTarihi(o)||o.date||''; if(!uyar(t))return; if(o.personel){ ozet.zarar+=Number(o.zarar)||0; ozet.geri+=Number(o.geriAlinan)||0; ekle(o.personel,'kamera',t,o.zarar,o.ceza,
     {sube:subeAdi(o.branchId),baslik:(o.amount+' '+(YON_ETIKET[o.direction]||'')),aciklama:o.finding,fotolar:[],odemeler:bahisOdemeler(o)}, o.geriAlinan); } });
@@ -2345,14 +2346,24 @@ async function karneTopla(scope,opt){
 function karneSatirAc(tr){ const d=tr.nextElementSibling; if(!d||!d.classList.contains('karne-detay'))return;
   const ac=d.classList.toggle('acik'); const ok=tr.querySelector('.karne-ok'); if(ok)ok.innerHTML=ac?'&#9660;':'&#9654;'; }
 // Karne: bir hataya tiklayinca aciklama/resim govdesini ac/kapat
-function hataAc(el){ const o=el.parentElement; const ac=o.classList.toggle('acik'); const ok=el.querySelector('.hata-ok'); if(ok)ok.innerHTML=ac?'&#9660;':'&#9654;'; }
+async function hataAc(el){ const o=el.parentElement; const ac=o.classList.toggle('acik'); const ok=el.querySelector('.hata-ok'); if(ok)ok.innerHTML=ac?'&#9660;':'&#9654;';
+  // TEMBEL: hata (bahis) acilinca SADECE o bahisin resimleri iner
+  if(ac && o.dataset.audit && o.dataset.bahis && o.dataset.yuklendi!=='1'){
+    o.dataset.yuklendi='1'; const kutu=o.querySelector('[data-foto-kutu]'); if(!kutu) return;
+    kutu.innerHTML='<span class="mini-not">Fotograflar yukleniyor...</span>';
+    try{ const snap=await db.collection('photos').where('auditId','==',o.dataset.audit).where('bahisId','==',o.dataset.bahis).get();
+      const resimler=snap.docs.map(d=>d.data().dataUrl).filter(Boolean);
+      if(!resimler.length){ kutu.innerHTML=''; return; }
+      if(!window._kG) window._kG=[]; const gi=window._kG.push(resimler)-1;
+      kutu.innerHTML='<div class="foto-galeri">'+resimler.map((d,idx)=>'<img class="foto-kucuk" src="'+esc(d||'')+'" alt="hata resmi" onclick="event.stopPropagation();lightboxAc(window._kG['+gi+'],'+idx+')">').join('')+'</div>';
+    }catch(err){console.error(err);kutu.innerHTML='<span class="mini-not">Fotograflar yuklenemedi.</span>';o.dataset.yuklendi='0';} } }
 async function karneCiz(){
   const el=$('karneIcerik');
   if(!$('karneAy').value) $('karneAy').value=ayBugun();
   const scope={tum:$('karneTum').checked,ay:$('karneAy').value};
   el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
   try{
-    const liste=await karneTopla(scope);
+    const liste=await karneTopla(scope,{fotosuz:true});   // TEMBEL: resimler karnede toplu inmez; hataya tiklayinca o bahisin resmi iner
     const donem=scope.tum?'Tum zamanlar':('Ay: '+esc(scope.ay));
     if(!liste.length){ el.innerHTML='<p class="mini-not">'+donem+'</p><p class="bos-satir">Bu donemde personele bagli hata kaydi yok.</p>'; return; }
     const toplamHata=liste.reduce((s,p)=>s+p.toplam,0);
@@ -2384,20 +2395,20 @@ async function karneCiz(){
       h+='<tr class="karne-detay"><td colspan="10">';
       if(!p.hatalar.length){ h+='<p class="bos-satir">Hata detayi yok.</p>'; }
       else{ h+='<ul class="hata-liste">';
-        p.hatalar.forEach(x=>{ const resimler=x.fotolar||[]; const gi=resimler.length?(window._kG.push(resimler)-1):-1;
-          h+='<li class="hata-oge"><div class="hata-bas" onclick="hataAc(this)"><span class="hata-ok">&#9654;</span>'+
+        p.hatalar.forEach(x=>{ const bahisFoto=!!(x.auditId&&x.bahisId);
+          h+='<li class="hata-oge"'+(bahisFoto?(' data-audit="'+esc(x.auditId)+'" data-bahis="'+esc(x.bahisId)+'"'):'')+'><div class="hata-bas" onclick="hataAc(this)"><span class="hata-ok">&#9654;</span>'+
             '<span class="hata-kaynak">'+esc(x.kaynakAd)+'</span>'+
             '<span class="rapor-tarih">'+(x.tarih?uzunTarih(x.tarih):'-')+'</span>'+
             '<span class="hata-baslik">'+esc(x.sube)+(x.baslik?(' - '+esc(x.baslik)):'')+'</span>'+
             tutarRozet(x.zarar)+(x.ceza?'<span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+
             ((x.zarar>0&&x.geriAlinan&&x.geriAlinan>=x.zarar)?'<span class="geri-rozet">geri alindi</span>':((x.zarar>0&&x.geriAlinan)?'<span class="geri-rozet">geri: '+tl(x.geriAlinan)+'</span>':''))+
-            (resimler.length?'<span class="bahis-say">'+resimler.length+' resim</span>':'')+'</div>'+
+            (bahisFoto?'<span class="bahis-say">&#128247;</span>':'')+'</div>'+
             '<div class="hata-govde">'+
               (x.aciklama?'<p style="margin:6px 0">'+esc(x.aciklama)+'</p>':'<p class="mini-not" style="margin:6px 0">Aciklama girilmemis.</p>')+
               ((x.odemeler&&x.odemeler.length)?('<div class="mini-not" style="margin:4px 0"><b>Musteri odemeleri:</b></div><ul class="odeme-liste">'+
                 x.odemeler.map((o,oi)=>'<li><span class="odeme-no">'+(oi+1)+'. odeme</span> <span class="odeme-tarih">'+(o.tarih?uzunTarih(o.tarih):'(tarihsiz)')+'</span> &middot; <b>'+tl(o.tutar)+'</b></li>').join('')+'</ul>'+
                 '<div class="mini-not">Odenen: '+tl(x.geriAlinan||0)+' / Zarar: '+tl(x.zarar||0)+' / Kalan: '+tl(Math.max(0,(x.zarar||0)-(x.geriAlinan||0)))+'</div>'):'')+
-              (resimler.length?('<div class="foto-galeri">'+resimler.map((d,idx)=>'<img class="foto-kucuk" src="'+esc(d||'')+'" alt="hata resmi" onclick="event.stopPropagation();lightboxAc(window._kG['+gi+'],'+idx+')">').join('')+'</div>'):'')+
+              (bahisFoto?'<div data-foto-kutu></div>':'')+
             '</div></li>';
         });
         h+='</ul>';
