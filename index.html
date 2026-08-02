@@ -939,29 +939,32 @@ async function panoCiz(){
 // Gorev tarihi: yeni kayitlarda 'taskDate', eski kayitlar icin 'dueDate' geriye donuk destek.
 function gorevTarihi(g){return g.taskDate||g.dueDate||null;}
 
-// Dashboard gorev panelini cizer.
+// Dashboard gorev panelini cizer. Gorevler + kamera incelemeleri TEK listede, KRONOLOJIK (en yeni ustte).
 function panoGorevleriCiz(gorevler,kameralar){
   const gEl=$('panoGorevler');
-  // Kamera incelemeleri: cozulenler de gorunur (silinmez), durumlariyla. Once devam edenler.
-  const kamListe=(kameralar||[]).slice().sort((a,b)=>(a.resolved?1:0)-(b.resolved?1:0));
+  const kamListe=(kameralar||[]);
   if(!gorevler.length && !kamListe.length){gEl.innerHTML='<p class="bos-satir">Henuz gorev yok.</p>';return;}
-  let html='';
+  const satirlar=[];
   gorevler.forEach(g=>{
     const bitti=g.status==='done';
     const gt=gorevTarihi(g);
-    html+=`<div class="gorev-satiri"><span><span class="nokta ${bitti?'yesil':'kirmizi'}"></span>`+
+    satirlar.push({tarih:gt||'', html:
+      `<div class="gorev-satiri"><span><span class="nokta ${bitti?'yesil':'kirmizi'}"></span>`+
       `<b>${esc(atananAdlari(g))}</b> - ${esc(g.title)}`+
       `${gt?' <span class="mini-not">('+esc(gt)+')</span>':''}</span>`+
-      `<span class="rozet ${bitti?'yesil':'kirmizi'}">${bitti?'Yapildi':'Yapilmadi'}</span></div>`;
+      `<span class="rozet ${bitti?'yesil':'kirmizi'}">${bitti?'Yapildi':'Yapilmadi'}</span></div>`});
   });
   kamListe.forEach(o=>{
     const d=kameraDurum(o);const kt=kameraTarihi(o);
-    html+=`<div class="gorev-satiri"><span><span class="nokta ${d.css}"></span>`+
+    satirlar.push({tarih:kt||'', html:
+      `<div class="gorev-satiri"><span><span class="nokta ${d.css}"></span>`+
       `<b>${esc(atananAdlari(o))}</b> - ${kameraIsOzeti(o)}`+
       `${kt?' <span class="mini-not">('+esc(kt)+')</span>':''}</span>`+
-      `<span class="rozet ${d.css}">${esc(d.metin)}</span></div>`;
+      `<span class="rozet ${d.css}">${esc(d.metin)}</span></div>`});
   });
-  gEl.innerHTML=html;
+  // Kronolojik: en yeni tarih EN USTTE; tarihi olmayanlar en altta.
+  satirlar.sort((a,b)=>{ if(!a.tarih&&!b.tarih)return 0; if(!a.tarih)return 1; if(!b.tarih)return -1; return String(b.tarih).localeCompare(String(a.tarih)); });
+  gEl.innerHTML=satirlar.map(x=>x.html).join('');
 }
 
 // Bu haftanin rota gun hucrelerine dusecek gorevleri kisi+gun'e gore haritalar.
