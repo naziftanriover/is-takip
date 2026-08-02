@@ -2169,7 +2169,7 @@ async function raporCiz(){
   try{
     const [audits,fotoHarita,kasaSnap,denetimSnap]=await Promise.all([
       auditleriGetir(),
-      auditFotoHaritasi(),
+      Promise.resolve({}),   // Rapor bahis RESIMLERINI GOSTERMEZ (resimler Audit'te var) -> foto CEKILMEZ, rapor hafif
       db.collection('cashEvents').get(),
       db.collection('dailyAudits').get()
     ]);
@@ -2237,14 +2237,10 @@ async function raporCiz(){
           bahisler.forEach(b=>{
             sZarar+=Number(b.zarar)||0; sGeri+=Number(b.geriAlinan)||0; T.zarar+=Number(b.zarar)||0; T.geri+=Number(b.geriAlinan)||0;
             (b.kisiler||[]).forEach(k=>{ sCeza+=Number(k.ceza)||0; T.ceza+=Number(k.ceza)||0; });
-            const resimler=b.fotolar.map(f=>f.dataUrl);
-            const gi=window._rG.push(resimler)-1;
             const kr=(b.kisiler||[]).map(k=>'<span class="personel-rozet">'+esc(k.ad)+(k.ceza?(' '+saat(k.ceza)):'')+(k.zararli?' &#9679;':'')+'</span>').join('');
             audHtml+='<div class="rapor-bahis-ic"><span class="bahis-tik">'+(b.ticketNo?esc(b.ticketNo):'(ticket yok)')+'</span> '+esc(b.aciklama||'')+
               kr+tutarRozet(b.zarar)+
-              ((b.geriAlinan&&b.zarar>0&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':((b.zarar>0&&b.geriAlinan)?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+'<div class="foto-galeri">';
-            b.fotolar.forEach((f,idx)=>{audHtml+='<img class="foto-kucuk" src="'+esc(f.dataUrl||'')+'" alt="foto" onclick="lightboxAc(window._rG['+gi+'],'+idx+')">';});
-            audHtml+='</div></div>';
+              ((b.geriAlinan&&b.zarar>0&&b.geriAlinan>=b.zarar)?'<span class="geri-rozet">geri alindi</span>':((b.zarar>0&&b.geriAlinan)?'<span class="geri-rozet">geri: '+tl(b.geriAlinan)+'</span>':''))+'</div>';
           });
           audHtml+='</div>';
         });
