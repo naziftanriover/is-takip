@@ -48,6 +48,10 @@ button:disabled{opacity:.6;cursor:default}
 .ust-bar .ikincil:hover{background:rgba(255,255,255,.16)}
 .ust-sag{display:flex;align-items:center;gap:12px}
 .ust-sol{display:flex;align-items:center;gap:10px}
+.ay-filtre-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid var(--renk-cizgi);border-radius:10px;padding:8px 12px;margin:0 0 14px}
+.ay-filtre-bar .af-etiket{font-weight:700;color:var(--renk-ana-koyu)}
+.ay-filtre-bar input[type=month]{padding:6px 8px;border:1px solid var(--renk-cizgi);border-radius:6px;font-size:14px;flex:0 0 auto;width:170px}
+.ay-filtre-bar .aktif-tum{background:var(--renk-ana);color:#fff;border-color:var(--renk-ana)}
 .menu-btn{display:none;background:transparent;border:none;color:#fff;font-size:24px;line-height:1;padding:8px 12px;margin:-4px 0;cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,.2);touch-action:manipulation}
 .menu-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:150}
 .menu-overlay.acik{display:block}
@@ -343,6 +347,16 @@ body.ceza-modu .ceza-btn{display:block!important}
 
   <main class="icerik">
 
+    <!-- GLOBAL AY FILTRESI -->
+    <div id="ayFiltreBar" class="ay-filtre-bar">
+      <span class="af-etiket">Ay:</span>
+      <button id="ayOnceki" type="button" class="ikincil kucuk" title="Onceki ay">&#9664;</button>
+      <input id="ayFiltre" type="month" />
+      <button id="aySonraki" type="button" class="ikincil kucuk" title="Sonraki ay">&#9654;</button>
+      <button id="ayTumBtn" type="button" class="ikincil kucuk">Tum aylar</button>
+      <span id="ayFiltreEtiket" class="mini-not"></span>
+    </div>
+
     <!-- DASHBOARD -->
     <section id="sekme-pano" class="sekme-bolum">
       <h2>Dashboard</h2>
@@ -488,7 +502,7 @@ body.ceza-modu .ceza-btn{display:block!important}
       <h2>Aylik Rapor</h2>
       <div class="kart-form">
         <div class="form-satir">
-          <div class="alan"><label>Ay</label><input id="raporAy" type="month" /></div>
+          <div class="alan" style="display:none"><label>Ay</label><input id="raporAy" type="month" /></div>
           <div class="alan" style="display:flex;align-items:flex-end"><button id="raporPdf" type="button" class="pdf-btn">&#128424; PDF olarak indir / Yazdir</button></div>
         </div>
       </div>
@@ -685,6 +699,20 @@ function kisiSecimTemizle(elId){ const el=$(elId); if(!el) return; el.querySelec
 // Inline DUZENLEME durumu (hangi kayit su an duzenleniyor)
 let duzenlenenGorev=null, duzenlenenAudit=null, duzenlenenBahis=null, duzenlenenKasa=null, duzenlenenDenetim=null;
 const acikAuditSet=new Set();   // Audit sekmesinde acik (bahisleri gorunen) audit id'leri - re-render'da korunur
+// ---- GLOBAL AY FILTRESI (Dashboard, Gorevler, Kasa & Kamera, Audit, Aylik Rapor) ----
+let aktifAy=ayBugun();      // secili ay 'YYYY-AA'
+let aktifTum=false;         // 'Tum aylar' modu (filtre kapali)
+function ayUygun(t){ if(aktifTum) return true; if(!t) return false; return String(t).slice(0,7)===aktifAy; }
+function ayKaydir(a,n){ const p=String(a||ayBugun()).split('-'); const d=new Date(Number(p[0]),(Number(p[1])-1)+n,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function aktifSekmeHedef(){ const b=document.querySelector('.sekme-btn.aktif'); return b?b.dataset.hedef:''; }
+function ayFiltreGorunum(){ const inp=$('ayFiltre'); if(inp){inp.value=aktifAy;inp.disabled=aktifTum;} const tb=$('ayTumBtn'); if(tb)tb.classList.toggle('aktif-tum',aktifTum); const et=$('ayFiltreEtiket'); if(et)et.textContent=aktifTum?'(tum aylar gosteriliyor)':''; }
+function ayYenile(){ ayFiltreGorunum(); const h=aktifSekmeHedef();
+  if(h==='sekme-pano') panoCiz();
+  else if(h==='sekme-gorevler') gorevCiz();
+  else if(h==='sekme-kasa') kasaCiz();
+  else if(h==='sekme-audit') auditCiz();
+  else if(h==='sekme-rapor'){ if($('raporAy'))$('raporAy').value=aktifTum?ayBugun():aktifAy; raporCiz(); }
+}
 // Element-tabanli kisi secim (inline duzenleme formlari icin; id gerektirmez)
 function kisiSecimEl(secili){ const el=document.createElement('div'); el.className='kisi-secim'; const sec=Array.isArray(secili)?secili:[];
   takimRoster().forEach(function(k){ const l=document.createElement('label'); l.className='kisi-onay';
@@ -871,6 +899,9 @@ function sekmeleriKur(){
     bols.forEach(s=>s.classList.toggle('gizli',s.id!==b.dataset.hedef));
     duzenlenenGorev=null;duzenlenenAudit=null;duzenlenenBahis=null;duzenlenenKasa=null;duzenlenenDenetim=null;   // sekme degisince duzenleme modundan cik
     menuKapat();   // sekme secince mobil menuyu kapat
+    // Global ay filtresi cubugu sadece ilgili sekmelerde gorunur
+    const ayliMi=['sekme-pano','sekme-gorevler','sekme-audit','sekme-kasa','sekme-rapor'].indexOf(b.dataset.hedef)>=0;
+    const afb=$('ayFiltreBar'); if(afb) afb.classList.toggle('gizli',!ayliMi);
     if(b.dataset.hedef==='sekme-log') logCiz();
     if(b.dataset.hedef==='sekme-pano') panoCiz();
     if(b.dataset.hedef==='sekme-gorevler') gorevCiz();
@@ -916,7 +947,10 @@ async function panoCiz(){
     ]);
     gorevler=sg.docs.map(d=>({id:d.id,...d.data()}));
     kameralar=sk.docs.map(d=>({id:d.id,...d.data()}));
-    panoGorevleriCiz(gorevler,kameralar);
+    // AY FILTRESI (tarihsiz gorev her ay gorunur); rota panosu icin filtresiz liste ayrica kullanilir
+    const gorevAy=gorevler.filter(g=>{const gt=gorevTarihi(g);return !gt||ayUygun(gt);});
+    const kameraAy=kameralar.filter(o=>ayUygun(kameraTarihi(o)||o.date));
+    panoGorevleriCiz(gorevAy,kameraAy);
   }catch(err){console.error(err);$('panoGorevler').innerHTML='<p class="bos-satir">Gorevler yuklenemedi.</p>';}
   // Audit durumu kutusu (sube bazinda: son denetim, kac gundur, son ticket)
   try{
@@ -925,7 +959,7 @@ async function panoCiz(){
   }catch(err){console.error(err);$('panoAudit').innerHTML='<p class="bos-satir">Audit durumu yuklenemedi.</p>';}
   // Bu ay en cok zarar veren personel (ilk 5)
   try{
-    const liste=(await karneTopla({tum:false,ay:ayBugun()},{fotosuz:true})).slice(0,5);
+    const liste=(await karneTopla({tum:aktifTum,ay:aktifAy},{fotosuz:true})).slice(0,5);
     const pe=$('panoPersonel');
     if(!liste.length){ pe.innerHTML='<p class="bos-satir">Bu ay personele bagli hata yok.</p>'; }
     else{ let h='<ul class="rapor-liste rapor-personel">';
@@ -1948,10 +1982,12 @@ async function auditCiz(){
       // NUMARALANDIRMA: kronolojik sira (en eski audit = 1. Audit)
       const krono=list.slice().sort((a,b)=>String(a.startDate||a.endDate||'').localeCompare(String(b.startDate||b.endDate||''))||(zmn(a.createdAt)-zmn(b.createdAt)));
       const noHarita={}; krono.forEach((a,i)=>{noHarita[a.id]=i+1;});
-      // GORUNTU SIRASI: en yeni audit EN USTTE
-      const goster=list.slice().sort((a,b)=>String(b.endDate||b.startDate||'').localeCompare(String(a.endDate||a.startDate||''))||(zmn(b.createdAt)-zmn(a.createdAt)));
+      // GORUNTU SIRASI: en yeni audit EN USTTE + AY FILTRESI (yapilis tarihine gore; yoksa endDate)
+      const goster=list.slice().sort((a,b)=>String(b.endDate||b.startDate||'').localeCompare(String(a.endDate||a.startDate||''))||(zmn(b.createdAt)-zmn(a.createdAt)))
+        .filter(a=>ayUygun(auditYapilisTarihi(a)||a.endDate));
+      if(!goster.length) return;   // bu ay bu subede audit yok -> subeyi gosterme
       const grp=document.createElement('div');grp.className='audit-sube-grup';
-      const bas=document.createElement('h3');bas.className='audit-sube-bas';bas.textContent=sube.name+' ('+list.length+' audit)';grp.appendChild(bas);
+      const bas=document.createElement('h3');bas.className='audit-sube-bas';bas.textContent=sube.name+' ('+goster.length+' audit)';grp.appendChild(bas);
       goster.forEach(a=>{
         if(a.id===duzenlenenAudit){ grp.appendChild(auditDuzenleFormu(a)); return; }
         const bahisSay=auditBahisleri(a,fotoHarita[a.id]||[]).length;
@@ -1983,6 +2019,7 @@ async function auditCiz(){
       });
       el.appendChild(grp);
     });
+    if(!el.innerHTML) el.innerHTML='<p class="bos-satir">Bu ayda audit kaydi yok. (Baska ay veya "Tum aylar" secin.)</p>';
   }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Audit kayitlari yuklenemedi.</p>';}
 }
 
@@ -1994,11 +2031,13 @@ async function gorevCiz(){
       db.collection('cashEvents').orderBy('date','desc').limit(50).get()
     ]);
     const fotoHarita=await gorevFotoHaritasi();
-    const kameralar=kSnap.docs.map(d=>({id:d.id,...d.data()}));
+    // AY FILTRESI: kamera tarihine gore; tarihsiz gorevler her ay gorunur
+    const kameralar=kSnap.docs.map(d=>({id:d.id,...d.data()})).filter(o=>ayUygun(kameraTarihi(o)||o.date));
     const kamListe=kameralar.slice().sort((a,b)=>(a.resolved?1:0)-(b.resolved?1:0));   // devam edenler once, cozulenler silinmez
+    const gorevDocs=s.docs.filter(doc=>{const gt=gorevTarihi(doc.data());return !gt||ayUygun(gt);});
     u.innerHTML='';
-    if(s.empty && !kamListe.length){u.innerHTML='<li class="bos-satir">Henuz gorev yok.</li>';return;}
-    s.forEach(doc=>{const g=doc.data();const id=doc.id;const fotolar=fotoHarita[id]||[];
+    if(!gorevDocs.length && !kamListe.length){u.innerHTML='<li class="bos-satir">Bu ayda gorev veya kamera kaydi yok.</li>';return;}
+    gorevDocs.forEach(doc=>{const g=doc.data();const id=doc.id;const fotolar=fotoHarita[id]||[];
       if(id===duzenlenenGorev){ u.appendChild(gorevDuzenleFormu(id,g)); return; }
       const li=document.createElement('li');li.className='kayit-satiri gorev-kart';
       const bitti=g.status==='done';
@@ -2105,8 +2144,9 @@ async function gorevGuncelle(id,tinp,kel,dinp){
 function ayBugun(){return bugun().slice(0,7);}   // 'YYYY-AA'
 async function raporCiz(){
   const el=$('raporIcerik');
-  if(!$('raporAy').value) $('raporAy').value=ayBugun();
-  const ay=$('raporAy').value;
+  // Global ay filtresinden gelir; "Tum aylar" secili ise rapor icin bu ayi kullan (rapor tek ay bazlidir)
+  const ay=aktifTum?ayBugun():aktifAy;
+  $('raporAy').value=ay;   // PDF fonksiyonu bu degeri okur
   el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
   try{
     const [audits,fotoHarita,kasaSnap,denetimSnap]=await Promise.all([
@@ -2668,9 +2708,10 @@ async function kasaCiz(){
   const u=$('kListe');
   try{
     const s=await db.collection('cashEvents').orderBy('date','desc').limit(50).get();
+    const docs=s.docs.filter(doc=>ayUygun(doc.data().date));   // AY FILTRESI
     u.innerHTML='';
-    if(s.empty){u.innerHTML='<li class="bos-satir">Henuz kasa/kamera kaydi yok.</li>';return;}
-    s.forEach(doc=>{const o=doc.data();const id=doc.id;
+    if(!docs.length){u.innerHTML='<li class="bos-satir">Bu ayda kasa/kamera kaydi yok.</li>';return;}
+    docs.forEach(doc=>{const o=doc.data();const id=doc.id;
       if(duzenlenenKasa===id){u.appendChild(kasaDuzenleFormu(id,o));return;}
       const baslikMetni=`${o.date} - ${subeAdi(o.branchId)} - ${o.amount} ${YON_ETIKET[o.direction]||''}`;
       // Cozulen kayit KUCULUR (sadece baslik); tiklayinca detay acilir. Acik kayitlar bastan acik.
@@ -2743,6 +2784,11 @@ $('rTarih').addEventListener('change',rotaYukle);
 $('rOnceki').addEventListener('click',()=>rotaHaftaKaydir(-HAFTA_GUN_SAYISI));
 $('rSonraki').addEventListener('click',()=>rotaHaftaKaydir(HAFTA_GUN_SAYISI));
 $('raporAy').addEventListener('change',raporCiz);
+$('ayFiltre').addEventListener('change',()=>{aktifAy=$('ayFiltre').value||ayBugun();aktifTum=false;ayYenile();});
+$('ayOnceki').addEventListener('click',()=>{aktifTum=false;aktifAy=ayKaydir(aktifAy,-1);ayYenile();});
+$('aySonraki').addEventListener('click',()=>{aktifTum=false;aktifAy=ayKaydir(aktifAy,1);ayYenile();});
+$('ayTumBtn').addEventListener('click',()=>{aktifTum=!aktifTum;ayYenile();});
+ayFiltreGorunum();
 $('karneAy').addEventListener('change',karneCiz);
 $('karneTum').addEventListener('change',karneCiz);
 $('rPdf').addEventListener('click',rotaPdf);
