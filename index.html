@@ -255,6 +255,9 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 .audit-bahis-say{color:var(--renk-soluk);font-size:13px;margin-left:auto}
 .audit-govde{display:none;margin-top:10px;border-top:1px solid var(--renk-cizgi);padding-top:10px}
 .audit-kart.acik .audit-govde{display:block}
+.denetim-gun-sube{padding:8px 0;border-bottom:1px solid var(--renk-cizgi)}
+.denetim-gun-sube:last-child{border-bottom:none}
+.denetim-gun-sube .kayit-baslik{font-size:14px}
 .rapor-bahis-ic{margin:4px 0 4px 10px;padding:4px 8px;border-left:3px solid var(--renk-cizgi)}
 .bahis-arac{display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;margin-top:6px}
 /* Cok-kisi secim (atamalar) */
@@ -900,7 +903,7 @@ function sekmeleriKur(){
     duzenlenenGorev=null;duzenlenenAudit=null;duzenlenenBahis=null;duzenlenenKasa=null;duzenlenenDenetim=null;   // sekme degisince duzenleme modundan cik
     menuKapat();   // sekme secince mobil menuyu kapat
     // Global ay filtresi cubugu sadece ilgili sekmelerde gorunur
-    const ayliMi=['sekme-pano','sekme-gorevler','sekme-audit','sekme-kasa','sekme-rapor'].indexOf(b.dataset.hedef)>=0;
+    const ayliMi=['sekme-pano','sekme-denetim','sekme-gorevler','sekme-audit','sekme-kasa','sekme-rapor'].indexOf(b.dataset.hedef)>=0;
     const afb=$('ayFiltreBar'); if(afb) afb.classList.toggle('gizli',!ayliMi);
     if(b.dataset.hedef==='sekme-log') logCiz();
     if(b.dataset.hedef==='sekme-pano') panoCiz();
@@ -1360,37 +1363,50 @@ async function denetimSil(id,ozet){
     await denetimCiz();
   }catch(err){console.error(err);h.textContent='Silinemedi. Yetkiniz olmayabilir.';}
 }
+// Sube goruntu sirasi (durum.subeler sirasi)
+function subeSira(id){const i=durum.subeler.findIndex(s=>s.id===id);return i<0?99:i;}
 async function denetimCiz(){
   const u=$('dListe');
   try{
-    const s=await db.collection('dailyAudits').orderBy('date','desc').limit(40).get();
+    const s=await db.collection('dailyAudits').orderBy('date','desc').limit(500).get();
+    const kayitlar=s.docs.map(d=>({id:d.id,...d.data()})).filter(k=>ayUygun(k.date));   // AY FILTRESI
     u.innerHTML='';
-    if(s.empty){u.innerHTML='<li class="bos-satir">Henuz denetim kaydi yok.</li>';return;}
-    s.forEach(doc=>{const k=doc.data();const id=doc.id;
-      if(id===duzenlenenDenetim){u.appendChild(denetimDuzenleFormu(id,k));return;}
-      const li=document.createElement('li');li.className='kayit-satiri';
-      const yanlis=denetimYanlislar(k);
-      let detay='';
-      if(yanlis.length){
-        detay='<div class="kayit-detay rapor-yanlis"><b>'+yanlis.length+' hata:</b></div><ul class="rapor-liste" style="margin:4px 0">';
-        yanlis.forEach(x=>{detay+='<li><b>'+esc(x.label)+'</b>'+(x.aciklama?' - '+esc(x.aciklama):'')+
-          (x.personel?'<span class="personel-rozet">'+esc(x.personel)+'</span>':'')+
-          (x.zarar?(' '+tutarRozet(x.zarar)):'')+
-          (x.ceza?' <span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+'</li>';});
-        detay+='</ul>';
-      } else {
-        detay='<div class="kayit-detay rapor-dogru">'+esc(denetimOzet(k))+'</div>';
-      }
-      li.innerHTML=`<div class="kayit-baslik">${esc(k.date)} - ${esc(subeAdi(k.branchId))}</div>
-        ${detay}
-        <div class="kayit-alt">${k.note?esc(k.note)+' - ':''}${esc(buyukAd(k.createdByName||''))} - ${saatMetni(k.createdAt)}</div>`;
-      const arac=document.createElement('div');arac.className='kayit-alt satir-arac';
-      const dz=document.createElement('button');dz.className='ikincil kucuk';dz.textContent='Duzenle';
-      dz.onclick=()=>{duzenlenenDenetim=id;denetimCiz();};arac.appendChild(dz);
-      if(k.createdBy===durum.uid||yoneticiMi()){const sb=document.createElement('button');sb.className='ikincil kucuk';sb.textContent='Sil';
-        sb.onclick=()=>denetimSil(id,k.date+' '+subeAdi(k.branchId));arac.appendChild(sb);}
-      li.appendChild(arac);
-      u.appendChild(li);});
+    if(!kayitlar.length){u.innerHTML='<li class="bos-satir">Bu ayda gunluk denetim kaydi yok.</li>';return;}
+    // GUNE GORE GRUPLA: bir gun = bir katlanabilir satir
+    const gunler={};
+    kayitlar.forEach(k=>{ (gunler[k.date]=gunler[k.date]||[]).push(k); });
+    Object.keys(gunler).sort((a,b)=>String(b).localeCompare(String(a))).forEach(gun=>{   // en yeni gun ustte
+      const grup=gunler[gun].slice().sort((a,b)=>subeSira(a.branchId)-subeSira(b.branchId));
+      let toplamHata=0; grup.forEach(k=>{toplamHata+=denetimYanlislar(k).length;});
+      const duzenlenenBuGun=grup.some(k=>k.id===duzenlenenDenetim);
+      const li=document.createElement('li');li.className='kayit-satiri gorev-kart'+(duzenlenenBuGun?' acik':'');
+      const head=document.createElement('div');head.className='gorev-bas';
+      head.innerHTML='<span class="gorev-ok">'+(duzenlenenBuGun?'&#9660;':'&#9654;')+'</span>'+
+        '<span class="gorev-ad">'+uzunTarih(gun)+'</span>'+
+        '<span class="mini-not gorev-ata">'+grup.length+' sube'+(toplamHata?(' &middot; <b class="rapor-yanlis">'+toplamHata+' hata</b>'):' &middot; <span class="rapor-dogru">hepsi dogru</span>')+'</span>';
+      head.onclick=()=>{li.classList.toggle('acik');head.querySelector('.gorev-ok').innerHTML=li.classList.contains('acik')?'&#9660;':'&#9654;';};
+      li.appendChild(head);
+      const govde=document.createElement('div');govde.className='gorev-govde';
+      grup.forEach(k=>{
+        if(k.id===duzenlenenDenetim){ govde.appendChild(denetimDuzenleFormu(k.id,k)); return; }
+        const blk=document.createElement('div');blk.className='denetim-gun-sube';
+        const yanlis=denetimYanlislar(k);
+        let detay='';
+        if(yanlis.length){ detay='<ul class="rapor-liste" style="margin:4px 0">'+
+          yanlis.map(x=>'<li><b>'+esc(x.label)+'</b>'+(x.aciklama?' - '+esc(x.aciklama):'')+(x.personel?'<span class="personel-rozet">'+esc(x.personel)+'</span>':'')+(x.zarar?(' '+tutarRozet(x.zarar)):'')+(x.ceza?' <span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+'</li>').join('')+'</ul>';
+        } else { detay='<div class="kayit-detay rapor-dogru">'+esc(denetimOzet(k))+'</div>'; }
+        blk.innerHTML='<div class="kayit-baslik">'+esc(subeAdi(k.branchId))+(yanlis.length?' <span class="rapor-yanlis">('+yanlis.length+' hata)</span>':' <span class="rapor-dogru">(hepsi dogru)</span>')+'</div>'+detay+
+          '<div class="kayit-alt">'+(k.note?esc(k.note)+' - ':'')+esc(buyukAd(k.createdByName||''))+' - '+saatMetni(k.createdAt)+'</div>';
+        const arac=document.createElement('div');arac.className='kayit-alt satir-arac';
+        const dz=document.createElement('button');dz.className='ikincil kucuk';dz.textContent='Duzenle';
+        dz.onclick=(e)=>{e.stopPropagation();duzenlenenDenetim=k.id;denetimCiz();};arac.appendChild(dz);
+        if(k.createdBy===durum.uid||yoneticiMi()){const sb=document.createElement('button');sb.className='ikincil kucuk';sb.textContent='Sil';
+          sb.onclick=(e)=>{e.stopPropagation();denetimSil(k.id,k.date+' '+subeAdi(k.branchId));};arac.appendChild(sb);}
+        blk.appendChild(arac);
+        govde.appendChild(blk);
+      });
+      li.appendChild(govde);u.appendChild(li);
+    });
   }catch(err){console.error(err);u.innerHTML='<li class="bos-satir">Kayitlar yuklenemedi.</li>';}
 }
 
