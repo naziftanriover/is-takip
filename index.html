@@ -370,6 +370,26 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
   .icerik{padding:14px 14px calc(16px + env(safe-area-inset-bottom))}
   .kpi .k-val{font-size:22px}
 }
+/* ===== BELIRGIN MODERN: ikonlar + renkli durum etiketleri + KPI vurgu ===== */
+.sekme-btn{display:flex;align-items:center;gap:11px}
+.sekme-btn>svg{width:18px;height:18px;flex:0 0 auto;opacity:.85}
+.sekme-btn.aktif>svg{opacity:1}
+/* Renkli noktali durum etiketi (Audit durumu vb.) */
+.durum-pill{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.6}
+.durum-pill i{width:7px;height:7px;border-radius:50%;background:currentColor;flex:0 0 auto}
+.dp-yesil{background:#ecfdf3;color:#067647}.dp-amber{background:#fffaeb;color:#b54708}.dp-kirmizi{background:#fef2f2;color:#b42318}
+/* KPI: ust renk seridi + ikon */
+.kpi{border-top:3px solid var(--renk-cizgi)}
+.kpi-hata{border-top-color:var(--renk-ana)}.kpi-zarar{border-top-color:var(--kirmizi)}
+.kpi.vurgu{border-top:none}
+.k-ust{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.k-ust svg{width:16px;height:16px;color:var(--renk-soluk);opacity:.9}
+.kpi-hata .k-ust svg{color:var(--renk-ana)}.kpi-zarar .k-ust svg{color:var(--kirmizi)}
+.kpi.vurgu .k-ust svg{color:#fff;opacity:.95}
+.k-ust .k-lbl{margin:0}
+/* Kart basliklarina teal kimlik noktasi */
+.pano-kart>h3:first-child{display:flex;align-items:center;gap:8px}
+.pano-kart>h3:first-child::before{content:"";width:6px;height:6px;border-radius:2px;background:var(--renk-ana);flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -964,9 +984,31 @@ $('cikisBtn').addEventListener('click', ()=>auth.signOut());
 // Mobil acilir menu (drawer) ac/kapa
 function menuAc(){ $('sekmeBar').classList.add('acik'); $('menuOverlay').classList.add('acik'); }
 function menuKapat(){ const s=$('sekmeBar'); if(s)s.classList.remove('acik'); const o=$('menuOverlay'); if(o)o.classList.remove('acik'); }
+// Sol menu ikonlari (Feather stili, currentColor -> menu rengini alir)
+const SEKME_IKON={
+  'sekme-pano':'<path d="M3 3h8v8H3zM13 3h8v8h-8zM13 13h8v8h-8zM3 13h8v8H3z"/>',
+  'sekme-denetim':'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>',
+  'sekme-gorevler':'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  'sekme-audit':'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>',
+  'sekme-kasa':'<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>',
+  'sekme-rota':'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  'sekme-rapor':'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/>',
+  'sekme-karne':'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  'sekme-ceza':'<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',
+  'sekme-log':'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+  'sekme-subeler':'<path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/>',
+  'sekme-yedek':'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>'
+};
+function sekmeIkonlariEkle(){
+  document.querySelectorAll('.sekme-btn').forEach(function(b){
+    if(b.querySelector('svg'))return; const ic=SEKME_IKON[b.dataset.hedef]; if(!ic)return;
+    b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ic+'</svg><span>'+b.textContent.trim()+'</span>';
+  });
+}
 function sekmeleriKur(){
   const btns=document.querySelectorAll('.sekme-btn');
   const bols=document.querySelectorAll('.sekme-bolum');
+  sekmeIkonlariEkle();
   const mBtn=$('menuBtn'); if(mBtn) mBtn.addEventListener('click',menuAc);
   const ov=$('menuOverlay'); if(ov) ov.addEventListener('click',menuKapat);
   btns.forEach(b=>b.addEventListener('click',()=>{
@@ -1041,10 +1083,14 @@ async function panoCiz(){
       const kZarar=(tumListe.ozet&&tumListe.ozet.zarar)||0, kGeri=(tumListe.ozet&&tumListe.ozet.geri)||0, kNet=kZarar-kGeri;
       const kHata=tumListe.reduce((s,p)=>s+p.toplam,0), kCeza=tumListe.reduce((s,p)=>s+p.ceza,0);
       const donemEt=aktifTum?'Tum zamanlar':aktifAy;
+      const IK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
+      const ikHata=IK+'<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>';
+      const ikZarar=IK+'<path d="M23 18l-9.5-9.5-5 5L1 6"/><path d="M17 18h6v-6"/></svg>';
+      const ikNet=IK+'<path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4z"/></svg>';
       kp.innerHTML=
-        '<div class="kpi"><div class="k-lbl">'+esc(donemEt)+' &middot; hata</div><div class="k-val">'+kHata+'</div><div class="k-alt">'+(kCeza?saat(kCeza)+' ceza':'ceza yok')+'</div></div>'+
-        '<div class="kpi"><div class="k-lbl">Toplam zarar</div><div class="k-val '+tutarSinif(kZarar)+'">'+tl(kZarar)+'</div><div class="k-alt">geri alinan '+tl(kGeri)+'</div></div>'+
-        '<div class="kpi vurgu"><div class="k-lbl">Net kalan</div><div class="k-val">'+tl(kNet)+'</div><div class="k-alt">'+(kNet<0?'sirket lehine (kar)':'musteriden beklenen')+'</div></div>';
+        '<div class="kpi kpi-hata"><div class="k-ust">'+ikHata+'<span class="k-lbl">'+esc(donemEt)+' hata</span></div><div class="k-val">'+kHata+'</div><div class="k-alt">'+(kCeza?saat(kCeza)+' ceza':'ceza yok')+'</div></div>'+
+        '<div class="kpi kpi-zarar"><div class="k-ust">'+ikZarar+'<span class="k-lbl">Toplam zarar</span></div><div class="k-val '+tutarSinif(kZarar)+'">'+tl(kZarar)+'</div><div class="k-alt">geri alinan '+tl(kGeri)+'</div></div>'+
+        '<div class="kpi vurgu"><div class="k-ust">'+ikNet+'<span class="k-lbl">Net kalan</span></div><div class="k-val">'+tl(kNet)+'</div><div class="k-alt">'+(kNet<0?'sirket lehine (kar)':'musteriden beklenen')+'</div></div>';
     }
     const liste=tumListe.slice(0,5);
     const pe=$('panoPersonel');
@@ -1666,11 +1712,14 @@ function auditOzetTabloHTML(audits){
   let h='<table class="ozet-tablo audit-ozet"><thead><tr><th>Sube</th><th>Son denetlenen gun</th><th>Kac gundur</th><th>Son ticket</th></tr></thead><tbody>';
   ozet.forEach(o=>{
     if(o.yok){h+='<tr><td class="kisi">'+esc(o.sube.name)+'</td><td colspan="3" class="audit-yok">Hic audit yok</td></tr>';return;}
-    const geciken=o.bekleyen!=null&&o.bekleyen>=3;
-    const gunMetni=o.bekleyen==null?'-':(o.bekleyen===0?'bugun':(o.bekleyen+' gun'));
+    let sinif,metin;
+    if(o.bekleyen==null){metin='-';sinif='';}
+    else if(o.bekleyen===0){metin='bugun';sinif='dp-yesil';}
+    else {metin=o.bekleyen+' gun';sinif=(o.bekleyen>=3?'dp-kirmizi':(o.bekleyen===2?'dp-amber':'dp-yesil'));}
+    const gunHucre=sinif?'<span class="durum-pill '+sinif+'"><i></i>'+metin+'</span>':metin;
     h+='<tr><td class="kisi">'+esc(o.sube.name)+'</td>'+
        '<td>'+uzunTarih(o.sonTarih)+'</td>'+
-       '<td class="'+(geciken?'audit-geciken':'')+'">'+gunMetni+'</td>'+
+       '<td>'+gunHucre+'</td>'+
        '<td>'+(o.sonTicket?esc(o.sonTicket):'-')+'</td></tr>';
   });
   h+='</tbody></table>';return h;
