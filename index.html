@@ -2515,7 +2515,27 @@ async function cezaCiz(){
       const btn=document.createElement('button');btn.type='button';btn.className='kucuk';btn.textContent='Kaydet';
       btn.onclick=function(){cezaYaz(k,inp.value,btn);};
       giris.appendChild(inp);giris.appendChild(lbl);giris.appendChild(btn);
-      row.appendChild(bilgi);row.appendChild(giris);el.appendChild(row);
+      row.appendChild(bilgi);row.appendChild(giris);
+      // BAHIS kalemi ise: TEMBEL fotograf (tiklayinca o bahisin resmi iner)
+      if(k.tur==='bahis'&&k.docId&&k.bahisId){
+        const fotoSar=document.createElement('div');fotoSar.style.flex='1 1 100%';
+        const fbtn=document.createElement('button');fbtn.type='button';fbtn.className='ikincil kucuk';fbtn.innerHTML='&#128247; Fotograflari goster';
+        const fkutu=document.createElement('div');fkutu.className='foto-galeri';fkutu.style.marginTop='6px';
+        let yuklendi=false;
+        fbtn.onclick=async function(){
+          if(!yuklendi){ yuklendi=true;fbtn.disabled=true;fkutu.innerHTML='<span class="mini-not">Yukleniyor...</span>';
+            try{ const snap=await db.collection('photos').where('auditId','==',k.docId).where('bahisId','==',k.bahisId).get();
+              const resimler=snap.docs.map(d=>d.data().dataUrl).filter(Boolean);
+              if(!resimler.length){ fkutu.innerHTML='<span class="mini-not">Bu bahiste foto yok.</span>'; }
+              else{ fkutu.innerHTML='';resimler.forEach(function(durl,idx){const im=document.createElement('img');im.src=durl;im.className='foto-kucuk';im.alt='bahis';im.onclick=function(){lightboxAc(resimler,idx);};fkutu.appendChild(im);}); }
+            }catch(err){console.error(err);fkutu.innerHTML='<span class="mini-not">Yuklenemedi.</span>';yuklendi=false;}
+            finally{fbtn.disabled=false;}
+          } else { fkutu.style.display=(fkutu.style.display==='none'?'':'none'); }
+          fbtn.innerHTML=(fkutu.style.display==='none'?'&#128247; Fotograflari goster':'&#128247; Fotograflari gizle');
+        };
+        fotoSar.appendChild(fbtn);fotoSar.appendChild(fkutu);row.appendChild(fotoSar);
+      }
+      el.appendChild(row);
     });
   }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Yuklenemedi.</p>';}
 }
