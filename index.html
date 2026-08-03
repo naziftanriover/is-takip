@@ -945,8 +945,8 @@ async function panoCiz(){
   let gorevler=[], kameralar=[];
   try{
     const [sg,sk]=await Promise.all([
-      db.collection('tasks').orderBy('createdAt','desc').limit(100).get(),
-      db.collection('cashEvents').orderBy('date','desc').limit(100).get()
+      db.collection('tasks').orderBy('createdAt','desc').limit(500).get(),
+      db.collection('cashEvents').orderBy('date','desc').limit(1000).get()
     ]);
     gorevler=sg.docs.map(d=>({id:d.id,...d.data()}));
     kameralar=sk.docs.map(d=>({id:d.id,...d.data()}));
@@ -1368,8 +1368,11 @@ function subeSira(id){const i=durum.subeler.findIndex(s=>s.id===id);return i<0?9
 async function denetimCiz(){
   const u=$('dListe');
   try{
-    const s=await db.collection('dailyAudits').orderBy('date','desc').limit(500).get();
-    const kayitlar=s.docs.map(d=>({id:d.id,...d.data()})).filter(k=>ayUygun(k.date));   // AY FILTRESI
+    // AY FILTRESI SUNUCU TARAFINDA: secili ay -> tarih araligi sorgusu (eski aylar limit'e takilmasin)
+    const s=aktifTum
+      ? await db.collection('dailyAudits').orderBy('date','desc').limit(1000).get()
+      : await db.collection('dailyAudits').where('date','>=',aktifAy+'-01').where('date','<=',aktifAy+'-31').orderBy('date','desc').get();
+    const kayitlar=s.docs.map(d=>({id:d.id,...d.data()})).filter(k=>ayUygun(k.date));
     u.innerHTML='';
     if(!kayitlar.length){u.innerHTML='<li class="bos-satir">Bu ayda gunluk denetim kaydi yok.</li>';return;}
     // GUNE GORE GRUPLA: bir gun = bir katlanabilir satir
@@ -1466,40 +1469,7 @@ function resimKucult(file){
     okuyucu.readAsDataURL(file);
   });
 }
-// Tum fotograflari cekip gorev id'sine gore gruplar.
-async function gorevFotoHaritasi(){
-  const harita={};
-  try{
-    const s=await db.collection('photos').orderBy('createdAt','desc').limit(400).get();
-    s.forEach(doc=>{const f=doc.data();if(!f.taskId)return;
-      if(!harita[f.taskId]) harita[f.taskId]=[];
-      harita[f.taskId].push({id:doc.id,...f});});
-  }catch(err){console.error(err);}
-  return harita;
-}
-// Bir goreve hatali odeme fotografi ekler (Firestore'da saklanir).
-// Bir goreve bir veya birden fazla foto ekler; her fotoya ayni aciklama (bu bahiste ne oldu) yazilir.
-async function gorevFotoEkle(taskId,files,aciklama){
-  const h=$('gHata');h.style.color='';
-  const liste=Array.isArray(files)?files:[files];
-  let ok=0;
-  h.textContent='Foto yukleniyor... (0/'+liste.length+')';
-  try{
-    for(let i=0;i<liste.length;i++){
-      const file=liste[i];
-      if(!file.type||file.type.indexOf('image/')!==0) continue;
-      const dataUrl=await resimKucult(file);
-      if(dataUrl.length>1000000) continue;          // cok buyuk resmi atla
-      await db.collection('photos').add({
-        taskId:taskId,uploadedBy:durum.uid,uploadedByName:adim(),
-        dataUrl:dataUrl,note:aciklama||'',createdAt:SUNUCU_ZAMAN()});
-      ok++;h.textContent='Foto yukleniyor... ('+ok+'/'+liste.length+')';
-    }
-    if(ok===0){h.textContent='Gecerli resim bulunamadi.';return;}
-    await logYaz('olusturma','Foto',taskId,ok+' foto'+(aciklama?' - '+aciklama:''));
-    h.textContent='';await gorevCiz();
-  }catch(err){console.error(err);h.style.color='';h.textContent='Foto yuklenemedi. Tekrar deneyin.';}
-}
+// (Kaldirildi: gorevFotoHaritasi + gorevFotoEkle - eski toplu-foto modeli; artik TEMBEL yukleme.)
 
 // Bir gorevin fotograflarini BAHIS bazinda gruplar.
 // Ayni bahisId'ye sahip fotolar tek bahistir; eski (bahisId'siz) kayitlar tek foto = tek bahis.
@@ -1588,20 +1558,11 @@ function lightboxKapat(){const o=document.getElementById('lightbox');if(o)o.clas
 function gunFarki(fromISO,toISO){return Math.round((tariheCevir(toISO)-tariheCevir(fromISO))/GUN_MS);}
 // Tum auditleri cek (bitis tarihine gore yeniden eskiye)
 async function auditleriGetir(){
-  try{const s=await db.collection('audits').orderBy('endDate','desc').limit(200).get();
+  try{const s=await db.collection('audits').orderBy('endDate','desc').limit(2000).get();   // numaralandirma+toplamlar TUM auditleri ister; kucuk dokumanlar (base64 yok)
     return s.docs.map(d=>({id:d.id,...d.data()}));
   }catch(err){console.error(err);return [];}
 }
-// Fotograflari auditId'ye gore gruplar
-async function auditFotoHaritasi(){
-  const harita={};
-  try{const s=await db.collection('photos').orderBy('createdAt','desc').limit(500).get();
-    s.forEach(doc=>{const f=doc.data();if(!f.auditId)return;
-      if(!harita[f.auditId]) harita[f.auditId]=[];
-      harita[f.auditId].push({id:doc.id,...f});});
-  }catch(err){console.error(err);}
-  return harita;
-}
+// (Kaldirildi: auditFotoHaritasi - eski toplu-foto modeli; artik TEMBEL yukleme.)
 // Her sube icin: en son denetlenen gun, kac gundur bekliyor, son ticket
 function subeAuditOzetleri(audits){
   const bg=bugun();
@@ -1630,27 +1591,7 @@ function auditOzetTabloHTML(audits){
   });
   h+='</tbody></table>';return h;
 }
-// Bir kayit kutusuna hatali bahis listesi + ekleme formu ekler (gorev ve audit ortak kullanir)
-// Bir audite hatali bahis ekler (foto auditId ile saklanir)
-async function auditBahisEkle(auditId,ticketNo,aciklama,files){
-  const h=$('aHata');h.style.color='';
-  const liste=Array.isArray(files)?files:[files];
-  const bahisId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('b'+Date.now()+Math.random().toString(16).slice(2));
-  let ok=0;h.textContent='Foto yukleniyor... (0/'+liste.length+')';
-  try{
-    for(let i=0;i<liste.length;i++){const file=liste[i];
-      if(!file.type||file.type.indexOf('image/')!==0) continue;
-      const dataUrl=await resimKucult(file);
-      if(dataUrl.length>1000000) continue;
-      await db.collection('photos').add({auditId:auditId,bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',
-        uploadedBy:durum.uid,uploadedByName:adim(),dataUrl:dataUrl,note:aciklama||'',createdAt:SUNUCU_ZAMAN()});
-      ok++;h.textContent='Foto yukleniyor... ('+ok+'/'+liste.length+')';
-    }
-    if(ok===0){h.textContent='Gecerli resim bulunamadi.';return;}
-    await logYaz('olusturma','Bahis',auditId,(ticketNo?('#'+ticketNo+' '):'')+ok+' foto'+(aciklama?' - '+aciklama:''));
-    h.textContent='';await auditCiz();
-  }catch(err){console.error(err);h.textContent='Foto yuklenemedi. Tekrar deneyin.';}
-}
+// (Kaldirildi: auditBahisEkle - foto-only bahis olusturan eski yol; kullanilmiyor.)
 
 // Bir audit'in bahislerini birlestir: audit.bets (foto olmasa da duran bahisler) + fotolar (bahisId ile).
 function auditBahisleri(audit,fotolar){
@@ -1707,16 +1648,19 @@ function bahisOdenen(b){return bahisOdemeler(b).reduce(function(s,o){return s+(N
 async function bahisOdemeEkle(auditId,bahisId,tutar,tarih){
   const h=$('aHata');h.style.color='';h.textContent='';
   try{
-    const ref=db.collection('audits').doc(auditId);const snap=await ref.get();const data=snap.data()||{};
-    const bets=(Array.isArray(data.bets)?data.bets:[]).map(function(x){
-      if(x&&x.bahisId===bahisId){
-        let od=Array.isArray(x.odemeler)?x.odemeler.slice():[];
-        if(!od.length && Number(x.geriAlinan)>0) od.push({tutar:Number(x.geriAlinan)||0,tarih:''});
-        od.push({tutar:Number(tutar)||0,tarih:tarih||''});
-        const toplam=od.reduce(function(s,o){return s+(Number(o.tutar)||0);},0);
-        return Object.assign({},x,{odemeler:od,geriAlinan:toplam});
-      } return x;});
-    await ref.update({bets:bets});
+    const ref=db.collection('audits').doc(auditId);
+    await db.runTransaction(async function(t){   // eszamanli duzenlemede kayip guncelleme olmasin
+      const snap=await t.get(ref);const data=snap.data()||{};
+      const bets=(Array.isArray(data.bets)?data.bets:[]).map(function(x){
+        if(x&&x.bahisId===bahisId){
+          let od=Array.isArray(x.odemeler)?x.odemeler.slice():[];
+          if(!od.length && Number(x.geriAlinan)>0) od.push({tutar:Number(x.geriAlinan)||0,tarih:''});
+          od.push({tutar:Number(tutar)||0,tarih:tarih||''});
+          const toplam=od.reduce(function(s,o){return s+(Number(o.tutar)||0);},0);
+          return Object.assign({},x,{odemeler:od,geriAlinan:toplam});
+        } return x;});
+      t.update(ref,{bets:bets});
+    });
     await logYaz('guncelleme','Bahis',auditId,'odeme +'+tl(tutar)+(tarih?(' ('+tarih+')'):''));
     await auditCiz();
   }catch(err){console.error(err);h.textContent='Odeme eklenemedi. Tekrar deneyin.';}
@@ -1725,16 +1669,19 @@ async function bahisOdemeSil(auditId,bahisId,idx){
   if(typeof confirm==='function'&&!confirm('Bu odeme kaydi silinsin mi?'))return;
   const h=$('aHata');h.style.color='';h.textContent='';
   try{
-    const ref=db.collection('audits').doc(auditId);const snap=await ref.get();const data=snap.data()||{};
-    const bets=(Array.isArray(data.bets)?data.bets:[]).map(function(x){
-      if(x&&x.bahisId===bahisId){
-        let od=Array.isArray(x.odemeler)?x.odemeler.slice():[];
-        if(!od.length && Number(x.geriAlinan)>0) od.push({tutar:Number(x.geriAlinan)||0,tarih:''});
-        od.splice(idx,1);
-        const toplam=od.reduce(function(s,o){return s+(Number(o.tutar)||0);},0);
-        return Object.assign({},x,{odemeler:od,geriAlinan:toplam});
-      } return x;});
-    await ref.update({bets:bets});
+    const ref=db.collection('audits').doc(auditId);
+    await db.runTransaction(async function(t){
+      const snap=await t.get(ref);const data=snap.data()||{};
+      const bets=(Array.isArray(data.bets)?data.bets:[]).map(function(x){
+        if(x&&x.bahisId===bahisId){
+          let od=Array.isArray(x.odemeler)?x.odemeler.slice():[];
+          if(!od.length && Number(x.geriAlinan)>0) od.push({tutar:Number(x.geriAlinan)||0,tarih:''});
+          od.splice(idx,1);
+          const toplam=od.reduce(function(s,o){return s+(Number(o.tutar)||0);},0);
+          return Object.assign({},x,{odemeler:od,geriAlinan:toplam});
+        } return x;});
+      t.update(ref,{bets:bets});
+    });
     await logYaz('guncelleme','Bahis',auditId,'odeme silindi');
     await auditCiz();
   }catch(err){console.error(err);h.textContent='Silinemedi.';}
@@ -1745,10 +1692,12 @@ async function auditBahisYeni(auditId,ticketNo,aciklama,zarar,kisiler){
   const bahisId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('b'+Date.now()+Math.random().toString(16).slice(2));
   try{
     const ref=db.collection('audits').doc(auditId);
-    const snap=await ref.get();const data=snap.data()||{};
-    const bets=Array.isArray(data.bets)?data.bets.slice():[];
-    bets.push({bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});
-    await ref.update({bets:bets});
+    await db.runTransaction(async function(t){
+      const snap=await t.get(ref);const data=snap.data()||{};
+      const bets=Array.isArray(data.bets)?data.bets.slice():[];
+      bets.push({bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});
+      t.update(ref,{bets:bets});
+    });
     const adlar=(kisiler||[]).map(function(k){return k.ad;}).join(', ');
     await logYaz('olusturma','Bahis',auditId,(ticketNo?('#'+ticketNo+' '):'')+(aciklama||'')+(adlar?(' ['+adlar+']'):''));
     await auditCiz();
@@ -1797,13 +1746,15 @@ async function auditBahisGuncelle(auditId,bahisId,ticketNo,aciklama,zarar,kisile
   const h=$('aHata');h.style.color='';h.textContent='';
   try{
     const ref=db.collection('audits').doc(auditId);
-    const snap=await ref.get();const data=snap.data()||{};
-    let bets=Array.isArray(data.bets)?data.bets.slice():[];
-    let bulundu=false;
-    // Object.assign ile odemeler/geriAlinan gibi geri-alim alanlari KORUNUR
-    bets=bets.map(function(x){ if(x&&x.bahisId===bahisId){bulundu=true;return Object.assign({},x,{ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});} return x; });
-    if(!bulundu) bets.push({bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});
-    await ref.update({bets:bets});
+    await db.runTransaction(async function(t){
+      const snap=await t.get(ref);const data=snap.data()||{};
+      let bets=Array.isArray(data.bets)?data.bets.slice():[];
+      let bulundu=false;
+      // Object.assign ile odemeler/geriAlinan gibi geri-alim alanlari KORUNUR
+      bets=bets.map(function(x){ if(x&&x.bahisId===bahisId){bulundu=true;return Object.assign({},x,{ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});} return x; });
+      if(!bulundu) bets.push({bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});
+      t.update(ref,{bets:bets});
+    });
     await logYaz('guncelleme','Bahis',auditId,'#'+(ticketNo||''));
     duzenlenenBahis=null; await auditCiz();
   }catch(err){console.error(err);h.textContent='Bahis guncellenemedi. Tekrar deneyin.';}
@@ -1816,9 +1767,11 @@ async function auditBahisSil(auditId,bahisId,ticketNo){
     const snap=await db.collection('photos').where('auditId','==',auditId).where('bahisId','==',bahisId).get();
     for(const d of snap.docs){ try{await d.ref.delete();}catch(e){console.error(e);} }
     const ref=db.collection('audits').doc(auditId);
-    const asnap=await ref.get();const data=asnap.data()||{};
-    const bets=(Array.isArray(data.bets)?data.bets:[]).filter(b=>b&&b.bahisId!==bahisId);
-    await ref.update({bets:bets});
+    await db.runTransaction(async function(t){
+      const asnap=await t.get(ref);const data=asnap.data()||{};
+      const bets=(Array.isArray(data.bets)?data.bets:[]).filter(b=>b&&b.bahisId!==bahisId);
+      t.update(ref,{bets:bets});
+    });
     await logYaz('silme','Bahis',auditId,'#'+(ticketNo||'')+' silindi');
     await auditCiz();
   }catch(err){console.error(err);h.textContent='Bahis silinemedi. Yetkiniz olmayabilir.';}
@@ -2072,8 +2025,8 @@ async function gorevCiz(){
   const u=$('gListe');
   try{
     const [s,kSnap]=await Promise.all([
-      db.collection('tasks').orderBy('createdAt','desc').limit(50).get(),
-      db.collection('cashEvents').orderBy('date','desc').limit(50).get()
+      db.collection('tasks').orderBy('createdAt','desc').limit(500).get(),
+      db.collection('cashEvents').orderBy('date','desc').limit(1000).get()
     ]);
     // TEMBEL YUKLEME: gorev fotograflari burada CEKILMEZ; her gorev acilinca kendi fotolari iner
     // AY FILTRESI: kamera tarihine gore; tarihsiz gorevler her ay gorunur
@@ -2107,7 +2060,7 @@ async function gorevCiz(){
       let gFotoYuklendi=false;
       head.onclick=async()=>{const acildi=li.classList.toggle('acik');head.querySelector('.gorev-ok').innerHTML=acildi?'&#9660;':'&#9654;';
         if(acildi&&!gFotoYuklendi){gFotoYuklendi=true;bahisKutu.innerHTML='<div class="kayit-alt mini-not">Yukleniyor...</div>';
-          try{const snap=await db.collection('photos').where('auditId','==',id).get();
+          try{const snap=await db.collection('photos').where('taskId','==',id).get();   // gorev fotolari taskId alaniyla saklanir
             gorevBahisKutuCiz(bahisKutu,snap.docs.map(d=>({id:d.id,...d.data()})),bitti);
           }catch(err){console.error(err);bahisKutu.innerHTML='<div class="kayit-alt mini-not">Yuklenemedi.</div>';gFotoYuklendi=false;}}};
       const yuk=document.createElement('div');yuk.className='foto-yuk';
@@ -2315,7 +2268,7 @@ async function karneTopla(scope,opt){
   // opt.fotosuz: fotograflari (base64, agir) CEKME -> dashboard gibi resim gostermeyen yerlerde hiz icin.
   const [audits,fotoHarita,kasaSnap,denetimSnap]=await Promise.all([
     auditleriGetir(),
-    opt.fotosuz?Promise.resolve({}):auditFotoHaritasi(),
+    Promise.resolve({}),   // karne/dashboard fotograflari TEMBEL yukler -> burada CEKILMEZ
     db.collection('cashEvents').get(), db.collection('dailyAudits').get()
   ]);
   const kasalar=kasaSnap.docs.map(d=>({id:d.id,...d.data()}));
@@ -2466,22 +2419,25 @@ async function cezaYaz(kalem,val,btn){
     if(kalem.tur==='denetim'){
       await db.collection('dailyAudits').doc(kalem.docId).update({['items.'+kalem.key+'.ceza']:v});
     } else if(kalem.tur==='bahis'){
-      const ref=db.collection('audits').doc(kalem.docId);const snap=await ref.get();const data=snap.data()||{};
-      const bets=(Array.isArray(data.bets)?data.bets:[]).map(function(b){
-        if(b&&b.bahisId===kalem.bahisId){
-          let ks=Array.isArray(b.kisiler)?b.kisiler.slice():(b.personel?[{ad:b.personel,ceza:Number(b.ceza)||0,zararli:true}]:[]);
-          const idx=(typeof kalem.kisiIndex==='number')?kalem.kisiIndex:-1;
-          if(idx>=0&&idx<ks.length&&(ks[idx].ad===kalem.kisiAd||!kalem.kisiAd)){
-            // dogru satiri INDEX ile guncelle (ayni ada sahip iki kisi karismasin)
-            ks=ks.map(function(k,ki){return ki===idx?Object.assign({},k,{ceza:v}):k;});
-          } else {
-            // index eslesmezse ada gore ILK eslesen; yoksa ekle
-            let bulundu=false; ks=ks.map(function(k){if(!bulundu&&k.ad===kalem.kisiAd){bulundu=true;return Object.assign({},k,{ceza:v});}return k;});
-            if(!bulundu) ks.push({ad:kalem.kisiAd,ceza:v,zararli:false});
-          }
-          return Object.assign({},b,{kisiler:ks});
-        } return b;});
-      await ref.update({bets:bets});
+      const ref=db.collection('audits').doc(kalem.docId);
+      await db.runTransaction(async function(t){
+        const snap=await t.get(ref);const data=snap.data()||{};
+        const bets=(Array.isArray(data.bets)?data.bets:[]).map(function(b){
+          if(b&&b.bahisId===kalem.bahisId){
+            let ks=Array.isArray(b.kisiler)?b.kisiler.slice():(b.personel?[{ad:b.personel,ceza:Number(b.ceza)||0,zararli:true}]:[]);
+            const idx=(typeof kalem.kisiIndex==='number')?kalem.kisiIndex:-1;
+            if(idx>=0&&idx<ks.length&&(ks[idx].ad===kalem.kisiAd||!kalem.kisiAd)){
+              // dogru satiri INDEX ile guncelle (ayni ada sahip iki kisi karismasin)
+              ks=ks.map(function(k,ki){return ki===idx?Object.assign({},k,{ceza:v}):k;});
+            } else {
+              // index eslesmezse ada gore ILK eslesen; yoksa ekle
+              let bulundu=false; ks=ks.map(function(k){if(!bulundu&&k.ad===kalem.kisiAd){bulundu=true;return Object.assign({},k,{ceza:v});}return k;});
+              if(!bulundu) ks.push({ad:kalem.kisiAd,ceza:v,zararli:false});
+            }
+            return Object.assign({},b,{kisiler:ks});
+          } return b;});
+        t.update(ref,{bets:bets});
+      });
     } else if(kalem.tur==='kamera'){
       await db.collection('cashEvents').doc(kalem.docId).update({ceza:v});
     }
@@ -2718,12 +2674,15 @@ async function kasaGuncelle(id,veri){
 async function kasaOdemeEkle(id,tutar,tarih){
   const h=$('kHata');h.style.color='';h.textContent='';
   try{
-    const ref=db.collection('cashEvents').doc(id);const snap=await ref.get();const o=snap.data()||{};
-    let od=Array.isArray(o.odemeler)?o.odemeler.slice():[];
-    if(!od.length && Number(o.geriAlinan)>0) od.push({tutar:Number(o.geriAlinan)||0,tarih:''});
-    od.push({tutar:Number(tutar)||0,tarih:tarih||''});
-    const toplam=od.reduce((s,x)=>s+(Number(x.tutar)||0),0);
-    await ref.update({odemeler:od,geriAlinan:toplam});
+    const ref=db.collection('cashEvents').doc(id);
+    await db.runTransaction(async function(t){
+      const snap=await t.get(ref);const o=snap.data()||{};
+      let od=Array.isArray(o.odemeler)?o.odemeler.slice():[];
+      if(!od.length && Number(o.geriAlinan)>0) od.push({tutar:Number(o.geriAlinan)||0,tarih:''});
+      od.push({tutar:Number(tutar)||0,tarih:tarih||''});
+      const toplam=od.reduce((s,x)=>s+(Number(x.tutar)||0),0);
+      t.update(ref,{odemeler:od,geriAlinan:toplam});
+    });
     await logYaz('guncelleme','Kasa/Kamera',id,'odeme +'+tl(tutar)+(tarih?(' ('+tarih+')'):''));
     await kasaCiz();
   }catch(err){console.error(err);h.textContent='Odeme eklenemedi. Tekrar deneyin.';}
@@ -2732,12 +2691,15 @@ async function kasaOdemeSil(id,idx){
   if(typeof confirm==='function'&&!confirm('Bu odeme kaydi silinsin mi?'))return;
   const h=$('kHata');h.style.color='';h.textContent='';
   try{
-    const ref=db.collection('cashEvents').doc(id);const snap=await ref.get();const o=snap.data()||{};
-    let od=Array.isArray(o.odemeler)?o.odemeler.slice():[];
-    if(!od.length && Number(o.geriAlinan)>0) od.push({tutar:Number(o.geriAlinan)||0,tarih:''});
-    od.splice(idx,1);
-    const toplam=od.reduce((s,x)=>s+(Number(x.tutar)||0),0);
-    await ref.update({odemeler:od,geriAlinan:toplam});
+    const ref=db.collection('cashEvents').doc(id);
+    await db.runTransaction(async function(t){
+      const snap=await t.get(ref);const o=snap.data()||{};
+      let od=Array.isArray(o.odemeler)?o.odemeler.slice():[];
+      if(!od.length && Number(o.geriAlinan)>0) od.push({tutar:Number(o.geriAlinan)||0,tarih:''});
+      od.splice(idx,1);
+      const toplam=od.reduce((s,x)=>s+(Number(x.tutar)||0),0);
+      t.update(ref,{odemeler:od,geriAlinan:toplam});
+    });
     await logYaz('guncelleme','Kasa/Kamera',id,'odeme silindi');
     await kasaCiz();
   }catch(err){console.error(err);h.textContent='Silinemedi.';}
@@ -2768,8 +2730,11 @@ function kasaGeriAlim(id,o){
 async function kasaCiz(){
   const u=$('kListe');
   try{
-    const s=await db.collection('cashEvents').orderBy('date','desc').limit(50).get();
-    const docs=s.docs.filter(doc=>ayUygun(doc.data().date));   // AY FILTRESI
+    // AY FILTRESI SUNUCU TARAFINDA (eski aylar limit'e takilmasin)
+    const s=aktifTum
+      ? await db.collection('cashEvents').orderBy('date','desc').limit(1000).get()
+      : await db.collection('cashEvents').where('date','>=',aktifAy+'-01').where('date','<=',aktifAy+'-31').orderBy('date','desc').get();
+    const docs=s.docs.filter(doc=>ayUygun(doc.data().date));
     u.innerHTML='';
     if(!docs.length){u.innerHTML='<li class="bos-satir">Bu ayda kasa/kamera kaydi yok.</li>';return;}
     docs.forEach(doc=>{const o=doc.data();const id=doc.id;
