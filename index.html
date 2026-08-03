@@ -12,12 +12,15 @@
 <meta name="apple-mobile-web-app-title" content="Security" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
 :root{
   --renk-arka:#eef2f0;--renk-kart:#ffffff;--renk-ana:#0d9488;--renk-ana-koyu:#0f766e;
   --renk-metin:#1e293b;--renk-soluk:#64748b;--renk-hata:#dc2626;--renk-cizgi:#e2e8e4;
   --renk-tint:#e6f4f1;--renk-yuzey:#f5f8f7;
-  --golge:0 1px 3px rgba(15,23,42,.07),0 1px 2px rgba(15,23,42,.04);--yuvarlak:12px;
+  --golge:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);--golge-hover:0 6px 16px rgba(16,24,40,.10);--yuvarlak:14px;
   --yesil:#16a34a;--kirmizi:#dc2626;--amber:#d97706;--gri:#94a3b8;--holiday:#6366f1;--kamera:#7c3aed;
 }
 *{box-sizing:border-box}
@@ -299,6 +302,74 @@ body.ceza-modu .ceza-btn{display:block!important}
 .rapor-audit-no{display:inline-block;font-weight:700;color:#fff;background:var(--renk-ana);border-radius:6px;padding:1px 8px;font-size:12px;margin-right:6px}
 .rapor-etiket{display:inline-block;font-size:11px;font-weight:700;color:#fff;border-radius:10px;padding:1px 8px;margin:0 4px}
 .rapor-gorev{background:var(--renk-ana)}.rapor-kamera{background:var(--kamera)}.rapor-denetim{background:var(--amber)}
+
+/* ==================================================================
+   PROFESYONEL CILA (UI Designer) + MOBIL/PWA DUZELTMELERI (Frontend Developer) - 2026-08
+   Not: Mevcut kurallari BOZMADAN, sona eklenip cascade ile override eder.
+   ================================================================== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{font-family:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;overscroll-behavior-y:contain}
+/* --- Tipografi: rakamlar hizali (para/saat/tarih) --- */
+.tl,.karne-tablo td.sag,.ozet-tablo td,.zarar-rozet,.ceza-rozet,.geri-rozet,.personel-rozet,
+.karne-zarar,.karne-geri,.rapor-tarih,.audit-tarih,.audit-ticket,.kpi .k-val{font-variant-numeric:tabular-nums}
+h2{font-size:18px;letter-spacing:-.01em}
+h3{font-size:13px;letter-spacing:.03em;text-transform:uppercase;color:var(--renk-soluk);font-weight:700}
+.pano-kart>h3:first-child,.pano-kart>h3{color:var(--renk-soluk)}
+/* --- Kartlar: kenarlik yumusak, hover derinlik --- */
+.pano-kart,.kart-form,.kayit-satiri{border-color:#eef1f0;box-shadow:var(--golge)}
+.pano-kart{transition:box-shadow .15s}
+.pano-kart:hover{box-shadow:var(--golge-hover)}
+/* --- KPI seridi (Dashboard ozet) --- */
+.kpi-satir{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 16px}
+.kpi{background:var(--renk-kart);border:1px solid #eef1f0;border-radius:var(--yuvarlak);padding:14px 16px;box-shadow:var(--golge)}
+.kpi .k-lbl{font-size:11px;font-weight:600;color:var(--renk-soluk);text-transform:uppercase;letter-spacing:.04em}
+.kpi .k-val{font-size:24px;font-weight:700;letter-spacing:-.02em;margin-top:4px}
+.kpi .k-alt{font-size:12px;color:var(--renk-soluk);margin-top:2px}
+.kpi.vurgu{background:linear-gradient(135deg,var(--renk-ana),var(--renk-ana-koyu));border:none;color:#fff}
+.kpi.vurgu .k-lbl,.kpi.vurgu .k-alt{color:rgba(255,255,255,.85)}
+/* --- Tablolar: yatay-cizgi + zebra + yapiskan baslik (Excel hissi kalksin) --- */
+.ozet-tablo th,.karne-tablo th{position:sticky;top:0;background:var(--renk-yuzey);border:none;
+  border-bottom:1px solid var(--renk-cizgi);font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--renk-soluk);font-weight:700;padding:10px 8px}
+.ozet-tablo td,.karne-tablo td{border:none;border-bottom:1px solid #eef1f0;padding:10px 8px}
+.ozet-tablo tbody tr:nth-child(2n) td,.karne-tablo tbody tr:nth-child(2n):not(.karne-detay) td{background:#fafcfb}
+.karne-tablo td.sag{text-align:right}
+/* --- Butonlar: yumusak, basma+odak halkasi --- */
+button{border-radius:10px;transition:background .15s,transform .05s,box-shadow .15s}
+button:active{transform:translateY(1px)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,.sekme-btn:focus-visible{outline:2px solid var(--renk-ana);outline-offset:2px}
+.ikincil{background:#fff;color:var(--renk-ana-koyu);border:1px solid var(--renk-cizgi)}
+.ikincil:hover{background:var(--renk-tint);border-color:var(--renk-ana)}
+/* --- Rozetler: tek olcek, yumusak zemin --- */
+.rozet,.personel-rozet,.zarar-rozet,.ceza-rozet,.geri-rozet{display:inline-flex;align-items:center;height:20px;padding:0 9px;
+  border-radius:999px;font-size:11.5px;font-weight:600;line-height:1;vertical-align:middle;margin-left:6px}
+.zarar-rozet{background:#fef2f2;color:#b42318}.ceza-rozet{background:#fffaeb;color:#b54708}
+.geri-rozet{background:#ecfdf3;color:#067647}.personel-rozet{background:var(--renk-tint);color:var(--renk-ana-koyu)}
+/* --- Sol menu / ust bar cilasi --- */
+.sekme-btn{border-radius:8px;font-weight:600}
+.sekme-btn.aktif{background:rgba(255,255,255,.14);box-shadow:inset 3px 0 0 #5eead4}
+.marka{letter-spacing:.6px}
+/* --- Ay filtre cubugu: segment kontrol hissi --- */
+.ay-filtre-bar{box-shadow:var(--golge);border-color:#eef1f0}
+.ay-filtre-bar button{background:#fff;border:1px solid var(--renk-cizgi);color:var(--renk-metin)}
+.ay-filtre-bar button:hover{background:var(--renk-tint)}
+.ay-filtre-bar .aktif-tum{background:var(--renk-ana);color:#fff;border-color:var(--renk-ana)}
+/* ================= MOBIL / PWA (Frontend Developer) ================= */
+/* iOS: 16px alti input odaklaninca sayfa zoom yapar -> 16px yap */
+input,select,textarea{font-size:16px}
+/* Dokunma: mavi flash azalt, secimi engelle, dokunma alani buyut */
+button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.15);touch-action:manipulation}
+.sekme-btn,label{-webkit-user-select:none;user-select:none}
+/* Icerik alti: home-indicator / jest cubugu icin guvenli alan (iOS+Android) */
+.icerik{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+/* Tablolar tasmasin: yatay kaydirma yumusak */
+.rota-kaydir,[style*="overflow-x:auto"]{-webkit-overflow-scrolling:touch}
+@media(max-width:640px){
+  /* Mobilde dokunma hedefleri >=40px */
+  .kucuk,.ikincil.kucuk{min-height:38px;padding:8px 12px}
+  .giris-sayfa{min-height:100dvh}
+  .icerik{padding:14px 14px calc(16px + env(safe-area-inset-bottom))}
+  .kpi .k-val{font-size:22px}
+}
 </style>
 </head>
 <body>
@@ -363,6 +434,7 @@ body.ceza-modu .ceza-btn{display:block!important}
     <!-- DASHBOARD -->
     <section id="sekme-pano" class="sekme-bolum">
       <h2>Dashboard</h2>
+      <div id="panoKpi" class="kpi-satir"></div>
       <div class="pano-kart">
         <h3 style="margin-top:0">Audit Durumu (sube bazinda)</h3>
         <div id="panoAudit"><p class="bos-satir">Yukleniyor...</p></div>
@@ -960,9 +1032,21 @@ async function panoCiz(){
     const audits=await auditleriGetir();
     $('panoAudit').innerHTML=auditOzetTabloHTML(audits);
   }catch(err){console.error(err);$('panoAudit').innerHTML='<p class="bos-satir">Audit durumu yuklenemedi.</p>';}
-  // Bu ay en cok zarar veren personel (ilk 5)
+  // Bu ay en cok zarar veren personel (ilk 5) + KPI seridi
   try{
-    const liste=(await karneTopla({tum:aktifTum,ay:aktifAy},{fotosuz:true})).slice(0,5);
+    const tumListe=await karneTopla({tum:aktifTum,ay:aktifAy},{fotosuz:true});
+    // ---- KPI seridi (donem ozeti) ----
+    const kp=$('panoKpi');
+    if(kp){
+      const kZarar=(tumListe.ozet&&tumListe.ozet.zarar)||0, kGeri=(tumListe.ozet&&tumListe.ozet.geri)||0, kNet=kZarar-kGeri;
+      const kHata=tumListe.reduce((s,p)=>s+p.toplam,0), kCeza=tumListe.reduce((s,p)=>s+p.ceza,0);
+      const donemEt=aktifTum?'Tum zamanlar':aktifAy;
+      kp.innerHTML=
+        '<div class="kpi"><div class="k-lbl">'+esc(donemEt)+' &middot; hata</div><div class="k-val">'+kHata+'</div><div class="k-alt">'+(kCeza?saat(kCeza)+' ceza':'ceza yok')+'</div></div>'+
+        '<div class="kpi"><div class="k-lbl">Toplam zarar</div><div class="k-val '+tutarSinif(kZarar)+'">'+tl(kZarar)+'</div><div class="k-alt">geri alinan '+tl(kGeri)+'</div></div>'+
+        '<div class="kpi vurgu"><div class="k-lbl">Net kalan</div><div class="k-val">'+tl(kNet)+'</div><div class="k-alt">'+(kNet<0?'sirket lehine (kar)':'musteriden beklenen')+'</div></div>';
+    }
+    const liste=tumListe.slice(0,5);
     const pe=$('panoPersonel');
     if(!liste.length){ pe.innerHTML='<p class="bos-satir">Bu ay personele bagli hata yok.</p>'; }
     else{ let h='<ul class="rapor-liste rapor-personel">';
