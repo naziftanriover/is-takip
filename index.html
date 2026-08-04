@@ -1070,13 +1070,15 @@ async function panoCiz(){
     panoGorevleriCiz(gorevAy,kameraAy);
   }catch(err){console.error(err);$('panoGorevler').innerHTML='<p class="bos-satir">Gorevler yuklenemedi.</p>';}
   // Audit durumu kutusu (sube bazinda: son denetim, kac gundur, son ticket)
+  let panoAudits=null;
   try{
-    const audits=await auditleriGetir();
-    $('panoAudit').innerHTML=auditOzetTabloHTML(audits);
+    panoAudits=await auditleriGetir();
+    $('panoAudit').innerHTML=auditOzetTabloHTML(panoAudits);
   }catch(err){console.error(err);$('panoAudit').innerHTML='<p class="bos-satir">Audit durumu yuklenemedi.</p>';}
   // Bu ay en cok zarar veren personel (ilk 5) + KPI seridi
   try{
-    const tumListe=await karneTopla({tum:aktifTum,ay:aktifAy},{fotosuz:true});
+    // panoAudits'i tekrar kullan -> karneTopla ayni audit sorgusunu 2. kez kosmasin (Firestore okuma tasarrufu)
+    const tumListe=await karneTopla({tum:aktifTum,ay:aktifAy},{fotosuz:true,audits:panoAudits||undefined});
     // ---- KPI seridi (donem ozeti) ----
     const kp=$('panoKpi');
     if(kp){
@@ -1179,19 +1181,21 @@ function kameraIsOzeti(o){
 }
 // Gorevler bolumunden bir kamera/kasa incelemesini "bitti" (cozuldu+incelendi) isaretler.
 async function kameraGorevBitir(id){
+  const h=$('gHata');if(h){h.style.color='';h.textContent='';}
   try{
     await db.collection('cashEvents').doc(id).update({resolved:true,cameraChecked:true});
     await logYaz('guncelleme','Kasa/Kamera',id,'gorev bitti (cozuldu)');
     await gorevCiz();
-  }catch(err){console.error(err);}
+  }catch(err){console.error(err);if(h)h.textContent='Islem kaydedilemedi. Yetkiniz olmayabilir veya baglanti yok.';}
 }
 // Bitmis kamera gorevini tekrar acar (Gorevler bolumunden).
 async function kameraGeriAc(id){
+  const h=$('gHata');if(h){h.style.color='';h.textContent='';}
   try{
     await db.collection('cashEvents').doc(id).update({resolved:false});
     await logYaz('guncelleme','Kasa/Kamera',id,'gorev yeniden acildi');
     await gorevCiz();
-  }catch(err){console.error(err);}
+  }catch(err){console.error(err);if(h)h.textContent='Islem kaydedilemedi. Yetkiniz olmayabilir veya baglanti yok.';}
 }
 
 // Bu haftanin rota gun hucrelerine dusecek kamera atamalari.
@@ -1752,6 +1756,18 @@ function bahisKisiler(b){
 }
 // Kasa/kamera kaydinin suclu personelleri (coklu). Eski tek 'personel' -> tek zararli kisi (geriye uyumlu).
 function kasaKisiler(o){ return bahisKisiler(o); }
+// Duzenleme kaydederken: formdan gelen kisilerin CEZASI bayat olabilir (ceza ayri ekranda / Bolge Muduru
+// tarafindan yazilir). Bu yuzden VERITABANINDAKI mevcut kisinin cezasini KORU; sadece yeni eklenen kisiye
+// formdaki cezayi uygula. Boylece eszamanli yazilan ceza kaybolmaz (lost-update onlenir).
+function kisilerCezaKoru(dbKayit,formKisiler){
+  const eski=bahisKisiler(dbKayit);
+  return (formKisiler||[]).map(function(nk,ni){
+    let dbc=null;
+    if(ni<eski.length && eski[ni].ad===nk.ad) dbc=eski[ni].ceza;   // once INDEX+ad
+    else { const m=eski.find(function(e){return e.ad===nk.ad;}); if(m) dbc=m.ceza; }   // sonra ada gore
+    return {ad:nk.ad,zararli:!!nk.zararli,ceza:(dbc!=null?dbc:(Number(nk.ceza)||0))};
+  });
+}
 // Bahis kisilerini ekleme/duzenleme editoru. Her satir: personel + ceza(saat) + "zarar bu kisiye" tik.
 function kisilerEditor(mevcut){
   const wrap=document.createElement('div');wrap.className='kisiler-ed';
@@ -1887,7 +1903,9 @@ async function auditBahisGuncelle(auditId,bahisId,ticketNo,aciklama,zarar,kisile
       let bets=Array.isArray(data.bets)?data.bets.slice():[];
       let bulundu=false;
       // Object.assign ile odemeler/geriAlinan gibi geri-alim alanlari KORUNUR
-      bets=bets.map(function(x){ if(x&&x.bahisId===bahisId){bulundu=true;return Object.assign({},x,{ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});} return x; });
+      bets=bets.map(function(x){ if(x&&x.bahisId===bahisId){bulundu=true;
+        const yeni=kisilerCezaKoru(x,Array.isArray(kisiler)?kisiler:[]);   // eszamanli yazilan ceza EZILMESIN
+        return Object.assign({},x,{ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:yeni});} return x; });
       if(!bulundu) bets.push({bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',zarar:Number(zarar)||0,kisiler:Array.isArray(kisiler)?kisiler:[]});
       t.update(ref,{bets:bets});
     });
@@ -2403,10 +2421,15 @@ async function raporCiz(){
 async function karneTopla(scope,opt){
   opt=opt||{};
   // opt.fotosuz: fotograflari (base64, agir) CEKME -> dashboard gibi resim gostermeyen yerlerde hiz icin.
+  // opt.audits: cagiran zaten auditleri cektiyse TEKRAR cekme (dashboard'da ayni sorgu 2 kez kosmasin).
+  // dailyAudits: belli bir ayda isek SUNUCU tarafinda tarih araligi ile cek (tum koleksiyonu tarama).
+  const denetimP = scope.tum
+    ? db.collection('dailyAudits').get()
+    : db.collection('dailyAudits').where('date','>=',scope.ay+'-01').where('date','<=',scope.ay+'-31').get();
   const [audits,fotoHarita,kasaSnap,denetimSnap]=await Promise.all([
-    auditleriGetir(),
+    (opt.audits?Promise.resolve(opt.audits):auditleriGetir()),
     Promise.resolve({}),   // karne/dashboard fotograflari TEMBEL yukler -> burada CEKILMEZ
-    db.collection('cashEvents').get(), db.collection('dailyAudits').get()
+    db.collection('cashEvents').get(), denetimP
   ]);
   const kasalar=kasaSnap.docs.map(d=>({id:d.id,...d.data()}));
   const denetimler=denetimSnap.docs.map(d=>({id:d.id,...d.data()}));
@@ -2425,21 +2448,21 @@ async function karneTopla(scope,opt){
       sube:(detay&&detay.sube)||'',baslik:(detay&&detay.baslik)||'',aciklama:(detay&&detay.aciklama)||'',fotolar:(detay&&detay.fotolar)||[],odemeler:(detay&&detay.odemeler)||[],
       auditId:(detay&&detay.auditId)||'',bahisId:(detay&&detay.bahisId)||''}); };   // auditId+bahisId -> karne drill-down'da foto TEMBEL iner
   // gunluk denetim yanlislari
-  denetimler.forEach(k=>{ if(!uyar(k.date))return; denetimYanlislar(k).forEach(x=>{ if(x.personel){ ozet.zarar+=Number(x.zarar)||0; ekle(x.personel,'denetim',k.date,x.zarar,x.ceza,
+  denetimler.forEach(k=>{ if(!uyar(k.date))return; denetimYanlislar(k).forEach(x=>{ ozet.zarar+=Number(x.zarar)||0;   // sirket zarari BIR KEZ (personel atanmasa da kayip gercek)
+    if(x.personel){ ekle(x.personel,'denetim',k.date,x.zarar,x.ceza,
     {sube:subeAdi(k.branchId),baslik:x.label,aciklama:x.aciklama,fotolar:[]}); } }); });
   // audit hatali bahisler (musteriden geri alinan da toplanir)
   audits.forEach(a=>{ const t=a.endDate||a.startDate||''; if(!uyar(t))return;
     auditBahisleri(a,fotoHarita[a.id]||[]).forEach(b=>{
-      const zararliVar=(b.kisiler||[]).some(k=>k.zararli&&k.ad);
-      if(zararliVar){ ozet.zarar+=Number(b.zarar)||0; ozet.geri+=Number(b.geriAlinan)||0; }   // bahis zarari/geri BIR KEZ
+      ozet.zarar+=Number(b.zarar)||0; ozet.geri+=Number(b.geriAlinan)||0;   // bahis zarari/geri BIR KEZ (zararli kisi isaretlenmese de sirket kaybi gercek)
       (b.kisiler||[]).forEach(k=>{ if(!k.ad)return;
       const kz=k.zararli?(Number(b.zarar)||0):0; const kg=k.zararli?(Number(b.geriAlinan)||0):0;
       ekle(k.ad,'bahis',t,kz,k.ceza,
         {sube:subeAdi(a.branchId),baslik:(b.ticketNo?('Ticket '+b.ticketNo):'Hatali bahis'),aciklama:b.aciklama,fotolar:b.fotolar.map(f=>f.dataUrl),odemeler:(k.zararli?bahisOdemeler(b):[]),auditId:a.id,bahisId:b.bahisId},kg); }); }); });
   // kamera / kasa
   kasalar.forEach(o=>{ const t=kameraTarihi(o)||o.date||''; if(!uyar(t))return;
-    const kk=kasaKisiler(o); const zararliVar=kk.some(k=>k.zararli&&k.ad);
-    if(zararliVar){ ozet.zarar+=Number(o.zarar)||0; ozet.geri+=Number(o.geriAlinan)||0; }
+    const kk=kasaKisiler(o);
+    ozet.zarar+=Number(o.zarar)||0; ozet.geri+=Number(o.geriAlinan)||0;   // kasa/kamera zarari/geri BIR KEZ
     kk.forEach(k=>{ if(!k.ad)return;
       const kz=k.zararli?(Number(o.zarar)||0):0; const kg=k.zararli?(Number(o.geriAlinan)||0):0;
       ekle(k.ad,'kamera',t,kz,k.ceza,
@@ -2822,7 +2845,13 @@ function kasaDuzenleFormu(id,o){
 async function kasaGuncelle(id,veri){
   const h=$('kHata');h.textContent='';
   try{
-    await db.collection('cashEvents').doc(id).update(veri);
+    const ref=db.collection('cashEvents').doc(id);
+    await db.runTransaction(async function(t){   // eszamanli duzenlemede kayip guncelleme olmasin
+      const snap=await t.get(ref);const o=snap.data()||{};
+      const yeni=Object.assign({},veri);
+      if(Array.isArray(veri.kisiler)) yeni.kisiler=kisilerCezaKoru(o,veri.kisiler);   // eszamanli yazilan ceza EZILMESIN
+      t.update(ref,yeni);
+    });
     const kAdlar=(Array.isArray(veri.kisiler)?veri.kisiler.map(function(k){return k.ad;}).filter(Boolean).join(', '):'');
     await logYaz('guncelleme','Kasa/Kamera',id,veri.amount+' '+(YON_ETIKET[veri.direction]||'')+(kAdlar?(' ['+kAdlar+']'):''));
     duzenlenenKasa=null; await kasaCiz();
