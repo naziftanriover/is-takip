@@ -340,10 +340,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,.s
 .ikincil{background:#fff;color:var(--renk-ana-koyu);border:1px solid var(--renk-cizgi)}
 .ikincil:hover{background:var(--renk-tint);border-color:var(--renk-ana)}
 /* --- Rozetler: tek olcek, yumusak zemin --- */
-.rozet,.personel-rozet,.zarar-rozet,.ceza-rozet,.geri-rozet{display:inline-flex;align-items:center;height:20px;padding:0 9px;
+.rozet,.personel-rozet,.zarar-rozet,.ceza-rozet,.geri-rozet,.ceza-yok-rozet{display:inline-flex;align-items:center;height:20px;padding:0 9px;
   border-radius:999px;font-size:11.5px;font-weight:600;line-height:1;vertical-align:middle;margin-left:6px}
 .zarar-rozet{background:#fef2f2;color:#b42318}.ceza-rozet{background:#fffaeb;color:#b54708}
 .geri-rozet{background:#ecfdf3;color:#067647}.personel-rozet{background:var(--renk-tint);color:var(--renk-ana-koyu)}
+.ceza-yok-rozet{background:#f2f4f7;color:#667085;border:1px solid #e4e7ec}
 /* --- Sol menu / ust bar cilasi --- */
 .sekme-btn{border-radius:8px;font-weight:600}
 .sekme-btn.aktif{background:rgba(255,255,255,.14);box-shadow:inset 3px 0 0 #5eead4}
@@ -2530,7 +2531,7 @@ async function karneCiz(){
             '<span class="hata-kaynak">'+esc(x.kaynakAd)+'</span>'+
             '<span class="rapor-tarih">'+(x.tarih?uzunTarih(x.tarih):'-')+'</span>'+
             '<span class="hata-baslik">'+esc(x.sube)+(x.baslik?(' - '+esc(x.baslik)):'')+'</span>'+
-            tutarRozet(x.zarar)+(x.ceza?'<span class="ceza-rozet">'+saat(x.ceza)+'</span>':'')+
+            tutarRozet(x.zarar)+(x.ceza?'<span class="ceza-rozet" title="Bu hata icin ceza yazildi">&#10003; ceza '+saat(x.ceza)+'</span>':'<span class="ceza-yok-rozet" title="Bu hata icin henuz ceza yazilmadi">ceza yok</span>')+
             ((x.zarar>0&&x.geriAlinan&&x.geriAlinan>=x.zarar)?'<span class="geri-rozet">geri alindi</span>':((x.zarar>0&&x.geriAlinan)?'<span class="geri-rozet">geri: '+tl(x.geriAlinan)+'</span>':''))+
             (bahisFoto?'<span class="bahis-say">&#128247;</span>':'')+'</div>'+
             '<div class="hata-govde">'+
