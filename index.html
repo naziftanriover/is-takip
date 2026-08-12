@@ -274,7 +274,7 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 body.salt-okunur #gForm, body.salt-okunur #denetimForm, body.salt-okunur #kForm, body.salt-okunur #aForm,
 body.salt-okunur .foto-yuk, body.salt-okunur .bahis-arac, body.salt-okunur .satir-arac, body.salt-okunur .yeni-bahis,
 body.salt-okunur #rKaydet, body.salt-okunur #rOnceki, body.salt-okunur #rSonraki,
-body.salt-okunur #sKur, body.salt-okunur #sAdmin{display:none!important}
+body.salt-okunur #sKur, body.salt-okunur #sAdmin, body.salt-okunur #personelEkleKutu{display:none!important}
 body.salt-okunur .rota-tablo select{pointer-events:none}
 body.salt-okunur #kullaniciAdi{font-weight:700}
 /* Ceza (bolge muduru) modu: Ceza sekmesi sadece bu modda gorunur; ceza panel kontrolleri salt-okunur'dan etkilenmez */
@@ -615,6 +615,18 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
           <div class="alan" style="display:flex;align-items:flex-end"><button id="karnePdf" type="button" class="pdf-btn">&#128424; PDF olarak indir / Yazdir</button></div>
         </div>
       </div>
+      <div class="kart-form" id="personelEkleKutu">
+        <details>
+          <summary style="cursor:pointer;font-weight:600;color:var(--renk-ana-koyu)">&#43; Yeni personel ekle</summary>
+          <div class="form-satir" style="margin-top:10px">
+            <div class="alan"><label>Ad Soyad</label><input id="yeniPersonelAd" type="text" placeholder="or. AHMET YILMAZ" autocomplete="off" /></div>
+            <div class="alan"><label>Sube</label><select id="yeniPersonelSube"></select></div>
+            <div class="alan" style="display:flex;align-items:flex-end"><button id="yeniPersonelEkle" type="button" class="kucuk">Personeli ekle</button></div>
+          </div>
+          <p id="yeniPersonelHata" class="hata-mesaji"></p>
+          <div id="ekPersonelListe" class="mini-not" style="margin-top:6px"></div>
+        </details>
+      </div>
       <div id="karneIcerik"><p class="bos-satir">Yukleniyor...</p></div>
     </section>
 
@@ -719,6 +731,21 @@ const SUBE_PERSONEL={
   'İtimat (Mağusa)':['AZRA','BARIŞ','BAYRAM','CUMALİ','DOĞUKAN','ELNAZ','İLKER','MELDA','MERVE'],
   'Bölge / Gezici':['DURMUŞ ALİ'],
 };
+// Sonradan (uygulama icinden) eklenen personel Firestore'da 'personnel' koleksiyonunda tutulur.
+// {ad, sube (SUBE_PERSONEL anahtari), createdBy, createdAt}. EK_PERSONEL bunlarin bellek kopyasi.
+let EK_PERSONEL=[];
+// Sabit liste + eklenen personel birlesik harita (sube -> [ad]). Tekrar eden ad tek gosterilir.
+function tumPersonelMap(){
+  const m={}; Object.keys(SUBE_PERSONEL).forEach(function(g){ m[g]=SUBE_PERSONEL[g].slice(); });
+  EK_PERSONEL.forEach(function(p){ if(!p||!p.ad||!p.sube) return; const g=p.sube;
+    if(!m[g]) m[g]=[]; if(m[g].indexOf(p.ad)<0) m[g].push(p.ad); });
+  return m;
+}
+async function personelleriYukle(){
+  try{ const s=await db.collection('personnel').orderBy('ad').get();
+    EK_PERSONEL=s.docs.map(function(d){ return Object.assign({id:d.id},d.data()); }); }
+  catch(e){ console.error('personel yuklenemedi',e); }
+}
 const YON_ETIKET={eksik:'Eksik',fazla:'Fazla'};
 const DURUM_ETIKET={todo:'Yapilacak',doing:'Yapiliyor',done:'Bitti'};
 const DEFAULT_BRANCHES=[
@@ -823,12 +850,16 @@ function duzAlan(etiket,tip,deger){ const w=document.createElement('div');
 // ---- Personel (hata yapan) secimi: tum personel gruplu, kendi subesi disi da secilebilir ----
 function personelOptionsHTML(secili){
   let h='<option value="">Personel secilmedi</option>';
-  Object.keys(SUBE_PERSONEL).forEach(function(grup){
+  const m=tumPersonelMap();
+  Object.keys(m).forEach(function(grup){
     h+='<optgroup label="'+esc(grup)+'">';
-    SUBE_PERSONEL[grup].forEach(function(ad){
+    m[grup].forEach(function(ad){
       h+='<option value="'+esc(ad)+'"'+(ad===secili?' selected':'')+'>'+esc(ad)+'</option>'; });
     h+='</optgroup>';
   });
+  // Secili ad listede yoksa (silinmis/eski) yine de gorunsun ki mevcut kayit bozulmasin
+  if(secili){ let bulundu=false; Object.keys(m).forEach(function(g){ if(m[g].indexOf(secili)>=0) bulundu=true; });
+    if(!bulundu) h+='<option value="'+esc(secili)+'" selected>'+esc(secili)+' (eski)</option>'; }
   return h;
 }
 // DOM <select> dondurur (inline formlar icin)
@@ -903,7 +934,7 @@ async function logYaz(action,entity,entityId,aciklama){
 }
 
 // ================== YEDEKLEME ==================
-const YEDEK_KOLONLAR=['branches','users','shifts','dailyAudits','tasks','cashEvents','audits','photos','auditLog'];
+const YEDEK_KOLONLAR=['branches','users','shifts','dailyAudits','tasks','cashEvents','audits','photos','auditLog','personnel'];
 // Tum verileri JSON olarak indirir (bilgisayara kaydeder).
 async function yedekIndir(){
   const st=$('yedekDurum');const btn=$('yedekBtn');st.style.color='';st.textContent='Yedek hazirlaniyor...';btn.disabled=true;
@@ -2488,11 +2519,54 @@ async function hataAc(el){ const o=el.parentElement; const ac=o.classList.toggle
       if(!window._kG) window._kG=[]; const gi=window._kG.push(resimler)-1;
       kutu.innerHTML='<div class="foto-galeri">'+resimler.map((d,idx)=>'<img class="foto-kucuk" src="'+esc(d||'')+'" alt="hata resmi" onclick="event.stopPropagation();lightboxAc(window._kG['+gi+'],'+idx+')">').join('')+'</div>';
     }catch(err){console.error(err);kutu.innerHTML='<span class="mini-not">Fotograflar yuklenemedi.</span>';o.dataset.yuklendi='0';} } }
+// ===== Yeni personel ekleme (Personel Karnesi icindeki kutu) =====
+function personelEkleKur(){
+  const sube=$('yeniPersonelSube'); if(!sube) return;
+  if(!sube._dolu){ sube.innerHTML=Object.keys(SUBE_PERSONEL).map(function(g){return '<option value="'+esc(g)+'">'+esc(g)+'</option>';}).join(''); sube._dolu=true; }
+  const btn=$('yeniPersonelEkle'); if(btn && !btn._bagli){ btn._bagli=true; btn.onclick=yeniPersonelKaydet; }
+  const adEl=$('yeniPersonelAd'); if(adEl && !adEl._bagli){ adEl._bagli=true; adEl.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); yeniPersonelKaydet(); } }); }
+  ekPersonelListeCiz();
+}
+function ekPersonelListeCiz(){
+  const el=$('ekPersonelListe'); if(!el) return;
+  if(!EK_PERSONEL.length){ el.innerHTML='<span class="mini-not">Henuz elle eklenen personel yok. (Sabit liste her zaman gecerlidir.)</span>'; return; }
+  el.innerHTML='<div style="margin:4px 0"><b>Elle eklenen personel ('+EK_PERSONEL.length+'):</b></div>'+EK_PERSONEL.map(function(p){
+    return '<span class="personel-rozet" style="margin:2px 6px 2px 0">'+esc(p.ad)+' <span class="mini-not">('+esc(p.sube||'')+')</span> <a href="javascript:void(0)" onclick="ekPersonelSil(\''+esc(p.id)+'\')" title="Kaldir" style="color:var(--kirmizi);text-decoration:none;font-weight:700;margin-left:4px">&times;</a></span>';
+  }).join('');
+}
+async function yeniPersonelKaydet(){
+  const h=$('yeniPersonelHata'); if(h){h.style.color='';h.textContent='';}
+  const adEl=$('yeniPersonelAd'), subeEl=$('yeniPersonelSube');
+  let ad=(adEl.value||'').trim(); try{ ad=ad.toLocaleUpperCase('tr-TR'); }catch(e){ ad=ad.toUpperCase(); }
+  const sube=subeEl.value||'';
+  if(!ad){ if(h){h.style.color='var(--kirmizi)';h.textContent='Ad Soyad girin.';} return; }
+  if(!sube){ if(h){h.style.color='var(--kirmizi)';h.textContent='Sube secin.';} return; }
+  const m=tumPersonelMap(); if(m[sube] && m[sube].indexOf(ad)>=0){ if(h){h.style.color='var(--kirmizi)';h.textContent=ad+' zaten '+sube+' listesinde var.';} return; }
+  const btn=$('yeniPersonelEkle'); if(btn)btn.disabled=true;
+  try{
+    await db.collection('personnel').add({ad:ad,sube:sube,createdBy:(auth.currentUser?auth.currentUser.uid:null),createdAt:SUNUCU_ZAMAN()});
+    await logYaz('olusturma','Personel','',ad+' ('+sube+')');
+    adEl.value='';
+    await personelleriYukle(); ekPersonelListeCiz();
+    if(h){h.style.color='var(--yesil)';h.textContent=ad+' eklendi. Artik tum personel listelerinde secilebilir.';}
+    setTimeout(function(){ if(h){h.style.color='';h.textContent='';} },4000);
+  }catch(err){ console.error(err); if(h){h.style.color='var(--kirmizi)';h.textContent='Eklenemedi. Yetkiniz olmayabilir veya guvenlik kurallari henuz yayinlanmamis olabilir.';} }
+  finally{ if(btn)btn.disabled=false; }
+}
+async function ekPersonelSil(id){
+  if(typeof confirm==='function' && !confirm('Bu personeli listeden kaldirmak istiyor musunuz? (Gecmis hata/ceza kayitlari etkilenmez.)')) return;
+  try{
+    await db.collection('personnel').doc(id).delete();
+    await logYaz('silme','Personel',id,'personel listeden kaldirildi');
+    await personelleriYukle(); ekPersonelListeCiz();
+  }catch(err){ console.error(err); const h=$('yeniPersonelHata'); if(h){h.style.color='var(--kirmizi)';h.textContent='Kaldirilamadi. Yetkiniz olmayabilir.';} }
+}
 async function karneCiz(){
   const el=$('karneIcerik');
   if(!$('karneAy').value) $('karneAy').value=ayBugun();
   const scope={tum:$('karneTum').checked,ay:$('karneAy').value};
   el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
+  await personelleriYukle(); personelEkleKur();   // eklenen personeli tazele + ekleme kutusunu kur
   try{
     const liste=await karneTopla(scope,{fotosuz:true});   // TEMBEL: resimler karnede toplu inmez; hataya tiklayinca o bahisin resmi iner
     const donem=scope.tum?'Tum zamanlar':('Ay: '+esc(scope.ay));
@@ -3036,6 +3110,7 @@ auth.onAuthStateChanged(async(u)=>{
     $('kullaniciAdi').textContent=buyukAd(adim())+(gm?' (Genel Mudur - salt okunur)':(cz?' (Bolge Muduru - sadece ceza)':''));
     await subeleriYukle();
     await kullanicilariYukle();
+    await personelleriYukle();   // elle eklenen personel tum formlarda gorunsun
     if(!baslatildi){ sekmeleriKur(); baslatildi=true; }
     denetimBaslat();gorevBaslat();auditBaslat();kasaBaslat();subeCiz();panoCiz();
   }catch(err){
