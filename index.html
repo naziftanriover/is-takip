@@ -1736,11 +1736,17 @@ function subeAuditOzetleri(audits){
   return durum.subeler.map(sube=>{
     const list=audits.filter(a=>a.branchId===sube.id);
     if(!list.length) return {sube,yok:true};
+    // Son denetlenen GUN: donem bitisi (endDate) en buyuk olan audit
     let son=list[0];
     list.forEach(a=>{if((a.endDate||'')>(son.endDate||'')) son=a;});
     const sonTarih=son.endDate||son.startDate||'';
     const bekleyen=sonTarih?gunFarki(sonTarih,bg):null;
-    return {sube,yok:false,sonTarih,sonTicket:son.ticketEnd||son.ticketStart||'',bekleyen,kayitSayisi:list.length};
+    // Son TICKET: en son YAPILAN audit'ten (yapilis tarihi; esitlikte kayit zamani).
+    // Onceden endDate'e gore seciliyordu -> sonradan yapilan ama donemi daha eski audit'in ticket'i kaciyordu.
+    let sonAudit=list[0];
+    const recKey=a=>(auditYapilisTarihi(a)||'')+'|'+((a.createdAt&&a.createdAt.seconds)?String(a.createdAt.seconds).padStart(12,'0'):'000000000000');
+    list.forEach(a=>{ if(recKey(a)>recKey(sonAudit)) sonAudit=a; });
+    return {sube,yok:false,sonTarih,sonTicket:sonAudit.ticketEnd||sonAudit.ticketStart||'',bekleyen,kayitSayisi:list.length};
   });
 }
 // Sube ozet tablosu (dashboard + audit sekmesi ortak)
