@@ -349,16 +349,17 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,.s
 /* Cash Difference giris tablosu */
 .cf-arac{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
 .cf-arac #cfKaydet{padding:10px 22px}
-.cf-grup{margin:12px 0;border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);overflow:hidden}
+.cf-grup{margin:12px 0;border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);overflow:hidden;max-width:640px}
 .cf-grup-bas{background:var(--renk-tint);color:var(--renk-ana-koyu);font-weight:700;padding:8px 12px;font-size:13px}
-.cf-satir{display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid var(--renk-cizgi)}
+.cf-satir{display:flex;align-items:center;gap:8px;padding:5px 12px;border-top:1px solid var(--renk-cizgi)}
 .cf-grup .cf-satir:first-of-type{border-top:none}
-.cf-ad{flex:1 1 auto;font-weight:600;font-size:14px}
-.cf-tutar{flex:0 0 130px;text-align:right}
-.cf-yon{flex:0 0 130px}
+.cf-ad{flex:0 0 150px;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cf-tutar{flex:0 0 90px;text-align:right}
+.cf-yon{flex:0 0 108px}
+.cf-ay{flex:0 0 auto;margin-left:auto;font-size:12px;color:var(--gri);white-space:nowrap}
 .cf-satir.dolu{background:#f6fefb}
 input.cf-tutar::-webkit-outer-spin-button,input.cf-tutar::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-@media(max-width:640px){.cf-tutar{flex:0 0 92px}.cf-yon{flex:0 0 108px}.cf-ad{font-size:13px}}
+@media(max-width:640px){.cf-ad{flex:0 0 96px;font-size:13px}.cf-tutar{flex:0 0 74px}.cf-yon{flex:0 0 96px}.cf-ay{font-size:11px}}
 /* --- Sol menu / ust bar cilasi --- */
 .sekme-btn{border-radius:8px;font-weight:600}
 .sekme-btn.aktif{background:rgba(255,255,255,.14);box-shadow:inset 3px 0 0 #5eead4}
@@ -2564,6 +2565,7 @@ async function hataAc(el){ const o=el.parentElement; const ac=o.classList.toggle
 // Isaretli tutar rozeti: eksik (negatif) kirmizi, fazla (pozitif) yesil.
 function cfIsaret(n){ n=Number(n)||0; if(n<0) return '<span class="zarar-rozet">-'+tl(Math.abs(n))+'</span>'; if(n>0) return '<span class="geri-rozet">+'+tl(n)+'</span>'; return '<span class="mini-not">0 TL</span>'; }
 let cfKurulu=false;
+let cfAylikNet={};   // personel -> bu ayki cash diff NET toplami (grid'de ve karnede gosterilir)
 function cashFarkKur(){ if(cfKurulu) return; cfKurulu=true;
   const btn=$('cfKaydet'); if(btn) btn.addEventListener('click',cashFarkGridKaydet);
   const tar=$('cfTarih'); if(tar) tar.addEventListener('change',cashFarkGridYukle);
@@ -2572,9 +2574,18 @@ async function cashFarkCiz(){
   cashFarkKur();
   if($('cfTarih') && !$('cfTarih').value) $('cfTarih').value=bugun();
   await personelleriYukle();
-  await cashFarkGridYukle();    // sectili gunun kutulari (mevcut kayitlarla dolu)
-  await cashFarkRaporCiz();     // aylik ozet + gunluk liste
+  await cashFarkRaporCiz();     // ONCE ay ozeti (cfAylikNet dolar) + gunluk liste
+  await cashFarkGridYukle();    // sonra grid (aylik toplamlari gosterir)
 }
+// Belli bir donemin cashDiff kayitlarini ceker (rapor + karne kolonu ortak kullanir).
+async function cashDiffKayitlariGetir(){
+  const s = aktifTum
+    ? await db.collection('cashDiff').orderBy('date','desc').limit(2000).get()
+    : await db.collection('cashDiff').where('date','>=',aktifAy+'-01').where('date','<=',aktifAy+'-31').orderBy('date','desc').get();
+  return s.docs.map(function(d){ return Object.assign({id:d.id},d.data()); }).filter(function(x){ return ayUygun(x.date); });
+}
+// cfAylikNet haritasini (personel -> net) doldurur.
+function cfAylikNetHesapla(kayitlar){ const m={}; kayitlar.forEach(function(k){ const ad=k.personel; if(!ad)return; m[ad]=(m[ad]||0)+(Number(k.fark)||0); }); cfAylikNet=m; return m; }
 // Sectili GUN icin grid'i mevcut kayitlarla doldurur (duzenleme)
 async function cashFarkGridYukle(){
   const grid=$('cfGrid'); if(!grid) return;
@@ -2596,10 +2607,12 @@ function cashFarkGridHTML(mevcut){
     m[sube].forEach(function(ad){
       const ex=mevcut[ad]; const has=!!ex; const f=has?(Number(ex.fark)||0):0;
       const val=has?String(Math.abs(f)):''; const yon=(has&&f<0)?'eksik':((has&&f>0)?'fazla':'eksik');
+      const ayNet=Number(cfAylikNet[ad])||0;
       h+='<div class="cf-satir'+(has?' dolu':'')+'" data-ad="'+esc(ad)+'"'+(has?(' data-id="'+esc(ex.id)+'"'):'')+'>'+
         '<span class="cf-ad">'+esc(ad)+'</span>'+
         '<input class="cf-tutar" type="text" inputmode="decimal" autocomplete="off" value="'+esc(val)+'" placeholder="-" />'+
         '<select class="cf-yon"><option value="eksik"'+(yon==='eksik'?' selected':'')+'>Eksik (-)</option><option value="fazla"'+(yon==='fazla'?' selected':'')+'>Fazla (+)</option></select>'+
+        '<span class="cf-ay" title="Bu ayki toplam">ay: '+(ayNet?cfIsaret(ayNet):'<span class="mini-not">0</span>')+'</span>'+
         '</div>';
     });
     h+='</div>';
@@ -2621,10 +2634,8 @@ function cashFarkEnterBagla(){
 async function cashFarkRaporCiz(){
   const el=$('cfIcerik'); if(!el) return; el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
   try{
-    const s = aktifTum
-      ? await db.collection('cashDiff').orderBy('date','desc').limit(2000).get()
-      : await db.collection('cashDiff').where('date','>=',aktifAy+'-01').where('date','<=',aktifAy+'-31').orderBy('date','desc').get();
-    const kayitlar=s.docs.map(function(d){ return Object.assign({id:d.id},d.data()); }).filter(function(x){ return ayUygun(x.date); });
+    const kayitlar=await cashDiffKayitlariGetir();
+    cfAylikNetHesapla(kayitlar);
     cashFarkRender(el,kayitlar);
   }catch(err){ console.error(err); el.innerHTML='<p class="bos-satir">Rapor yuklenemedi.</p>'; }
 }
@@ -2658,7 +2669,8 @@ async function cashFarkGridKaydet(){
     if(h){ h.style.color=hata?'var(--kirmizi)':'var(--yesil)';
       h.textContent=(hata?(hata+' kayit yazilamadi (yetki/kural?). '):'')+esc(tarih)+' kaydedildi: '+yeni+' yeni, '+guncel+' guncel'+(silinen?(', '+silinen+' silindi'):'')+'.';
       setTimeout(function(){ if(h){h.style.color='';h.textContent='';} },4500); }
-    await cashFarkRaporCiz();
+    await cashFarkRaporCiz();     // ay ozeti + cfAylikNet guncelle
+    await cashFarkGridYukle();    // grid'deki "ay:" toplamlarini tazele
   }catch(err){ console.error(err); if(h){h.style.color='var(--kirmizi)';h.textContent='Kaydedilemedi. Yetki veya kural sorunu olabilir.';} }
   finally{ if(btn)btn.disabled=false; }
 }
@@ -2737,6 +2749,18 @@ async function ekPersonelSil(id){
     await personelleriYukle(); ekPersonelListeCiz();
   }catch(err){ console.error(err); const h=$('yeniPersonelHata'); if(h){h.style.color='var(--kirmizi)';h.textContent='Kaldirilamadi. Yetkiniz olmayabilir.';} }
 }
+// Karne icin: secili doneme (scope) gore personel -> cash diff NET haritasi.
+async function cashDiffNetMap(scope){
+  try{
+    const s = scope.tum
+      ? await db.collection('cashDiff').orderBy('date','desc').limit(2000).get()
+      : await db.collection('cashDiff').where('date','>=',scope.ay+'-01').where('date','<=',scope.ay+'-31').orderBy('date','desc').get();
+    const m={}; s.docs.forEach(function(d){ const o=d.data(); if(!o||!o.personel) return;
+      if(!scope.tum && String(o.date||'').slice(0,7)!==scope.ay) return;
+      m[o.personel]=(m[o.personel]||0)+(Number(o.fark)||0); });
+    return m;
+  }catch(e){ console.error('cashDiff (karne) yuklenemedi',e); return {}; }
+}
 async function karneCiz(){
   const el=$('karneIcerik');
   if(!$('karneAy').value) $('karneAy').value=ayBugun();
@@ -2753,11 +2777,13 @@ async function karneCiz(){
     const toplamZarar=liste.ozet?liste.ozet.zarar:liste.reduce((s,p)=>s+p.zarar,0);
     const toplamGeri=liste.ozet?liste.ozet.geri:liste.reduce((s,p)=>s+(p.geriAlinan||0),0);
     const toplamNet=toplamZarar-toplamGeri;
+    const cdMap=await cashDiffNetMap(scope);   // personel -> bu donem cash diff NET
+    let toplamCd=0; liste.forEach(function(p){ toplamCd+=(Number(cdMap[p.ad])||0); });
     let h='<p class="mini-not">'+donem+' &mdash; '+liste.length+' personel, '+toplamHata+' hata &middot; zarar <b class="'+tutarSinif(toplamZarar)+'">'+tl(toplamZarar)+'</b> &middot; geri alinan <b>'+tl(toplamGeri)+'</b> &middot; net <b class="'+tutarSinif(toplamNet)+'">'+tl(toplamNet)+'</b>'+(toplamNet<0?' (KAR)':'')+' &middot; ceza <b>'+saat(toplamCeza)+'</b></p>';
     h+='<p class="mini-not">Personelin uzerine tikla: tum hatalari acilir. Bir hataya tikla: aciklama ve resimler acilir. Fazla odeme (+) zarar, eksik odeme (-) sirket lehine (kar); net eksi ise sirket kara gecmis demektir.</p>';
     h+='<div class="pano-kart" style="overflow-x:auto"><table class="karne-tablo"><thead><tr>'+
       '<th>Personel</th><th class="sag">Toplam hata</th><th class="sag">Toplam zarar</th><th class="sag">Geri alinan</th><th class="sag">Net kalan</th><th class="sag">Toplam ceza</th>'+
-      '<th class="sag">Gunluk denetim</th><th class="sag">Hatali bahis</th><th class="sag">Kamera</th><th class="sag">Son hata</th></tr></thead><tbody>';
+      '<th class="sag">Gunluk denetim</th><th class="sag">Hatali bahis</th><th class="sag">Kamera</th><th class="sag">Son hata</th><th class="sag">Aylik Cash Diff</th></tr></thead><tbody>';
     window._kG=[];   // karne foto gruplari (lightbox icin)
     liste.forEach(p=>{
       const kir=(o)=>{ if(!o.say)return '-'; const ek=[]; if(o.zarar)ek.push(tl(o.zarar)); if(o.ceza)ek.push(saat(o.ceza)); return o.say+(ek.length?(' ('+ek.join(', ')+')'):''); };
@@ -2771,9 +2797,10 @@ async function karneCiz(){
         '<td class="sag">'+kir(p.denetim)+'</td>'+
         '<td class="sag">'+kir(p.bahis)+'</td>'+
         '<td class="sag">'+kir(p.kamera)+'</td>'+
-        '<td class="sag">'+(p.sonTarih?uzunTarih(p.sonTarih):'-')+'</td></tr>';
+        '<td class="sag">'+(p.sonTarih?uzunTarih(p.sonTarih):'-')+'</td>'+
+        '<td class="sag">'+(cdMap[p.ad]?cfIsaret(cdMap[p.ad]):'-')+'</td></tr>';
       // --- detay satiri (personelin tum hatalari) ---
-      h+='<tr class="karne-detay"><td colspan="10">';
+      h+='<tr class="karne-detay"><td colspan="11">';
       if(!p.hatalar.length){ h+='<p class="bos-satir">Hata detayi yok.</p>'; }
       else{ h+='<ul class="hata-liste">';
         p.hatalar.forEach(x=>{ const bahisFoto=!!(x.auditId&&x.bahisId);
@@ -2797,7 +2824,7 @@ async function karneCiz(){
       h+='</td></tr>';
     });
     h+='<tr class="karne-toplam"><td>TOPLAM</td><td class="sag">'+toplamHata+'</td><td class="sag '+tutarSinif(toplamZarar)+'">'+tl(toplamZarar)+'</td><td class="sag karne-geri">'+tl(toplamGeri)+'</td><td class="sag '+tutarSinif(toplamNet)+'">'+tl(toplamNet)+'</td><td class="sag karne-ceza">'+saat(toplamCeza)+'</td>'+
-      '<td class="sag"></td><td class="sag"></td><td class="sag"></td><td class="sag"></td></tr>';
+      '<td class="sag"></td><td class="sag"></td><td class="sag"></td><td class="sag"></td><td class="sag">'+(toplamCd?cfIsaret(toplamCd):'-')+'</td></tr>';
     h+='</tbody></table></div>';
     el.innerHTML=h;
   }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Karne yuklenemedi.</p>';}
