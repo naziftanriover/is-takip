@@ -274,7 +274,8 @@ h3{margin:18px 0 6px;font-size:15px;color:var(--renk-ana-koyu)}
 body.salt-okunur #gForm, body.salt-okunur #denetimForm, body.salt-okunur #kForm, body.salt-okunur #aForm,
 body.salt-okunur .foto-yuk, body.salt-okunur .bahis-arac, body.salt-okunur .satir-arac, body.salt-okunur .yeni-bahis,
 body.salt-okunur #rKaydet, body.salt-okunur #rOnceki, body.salt-okunur #rSonraki,
-body.salt-okunur #sKur, body.salt-okunur #sAdmin, body.salt-okunur #personelEkleKutu{display:none!important}
+body.salt-okunur #sKur, body.salt-okunur #sAdmin, body.salt-okunur #personelEkleKutu,
+body.salt-okunur #cfForm, body.salt-okunur .cf-sil{display:none!important}
 body.salt-okunur .rota-tablo select{pointer-events:none}
 body.salt-okunur #kullaniciAdi{font-weight:700}
 /* Ceza (bolge muduru) modu: Ceza sekmesi sadece bu modda gorunur; ceza panel kontrolleri salt-okunur'dan etkilenmez */
@@ -431,6 +432,7 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
     <button class="sekme-btn" data-hedef="sekme-gorevler" type="button">Gorevler</button>
     <button class="sekme-btn" data-hedef="sekme-audit" type="button">Audit</button>
     <button class="sekme-btn" data-hedef="sekme-kasa" type="button">Kasa &amp; Kamera</button>
+    <button class="sekme-btn" data-hedef="sekme-cashfark" type="button">Cash Difference</button>
     <button class="sekme-btn" data-hedef="sekme-rota" type="button">Rota</button>
     <button class="sekme-btn" data-hedef="sekme-rapor" type="button">Aylik Rapor</button>
     <button class="sekme-btn" data-hedef="sekme-karne" type="button">Personel Karnesi</button>
@@ -562,6 +564,26 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
         <button id="kKaydet" type="submit">Kaydi Ekle</button>
       </form>
       <h3>Son kayitlar</h3><ul id="kListe" class="kayit-liste"></ul>
+    </section>
+
+    <!-- CASH DIFFERENCE (gunluk kasa farki) -->
+    <section id="sekme-cashfark" class="sekme-bolum gizli">
+      <h2>Cash Difference (Gunluk Kasa Farki)</h2>
+      <p class="alt-baslik">Her gun personelin kasa farkini girin. Eksik (-) ve fazla (+) aylik rapora yansir.</p>
+      <form id="cfForm" class="kart-form">
+        <div class="form-satir">
+          <div class="alan"><label>Tarih</label><input id="cfTarih" type="date" /></div>
+          <div class="alan"><label>Personel</label><select id="cfPersonel"></select></div>
+        </div>
+        <div class="form-satir">
+          <div class="alan"><label>Tutar (TL)</label><input id="cfTutar" type="number" min="0" step="0.01" placeholder="or. 50" /></div>
+          <div class="alan"><label>Yon</label><select id="cfYon"><option value="eksik">Eksik (-)</option><option value="fazla">Fazla (+)</option></select></div>
+        </div>
+        <div class="alan" style="flex:1 1 100%"><label>Not (istege bagli)</label><input id="cfNot" type="text" autocomplete="off" /></div>
+        <p id="cfHata" class="hata-mesaji"></p>
+        <button id="cfKaydet" type="submit">Kaydet</button>
+      </form>
+      <div id="cfIcerik"><p class="bos-satir">Yukleniyor...</p></div>
     </section>
 
     <!-- ROTA -->
@@ -746,6 +768,8 @@ async function personelleriYukle(){
     EK_PERSONEL=s.docs.map(function(d){ return Object.assign({id:d.id},d.data()); }); }
   catch(e){ console.error('personel yuklenemedi',e); }
 }
+// Bir personelin subesini (SUBE_PERSONEL anahtari) bulur.
+function personelSube(ad){ if(!ad) return ''; const m=tumPersonelMap(); let r=''; Object.keys(m).forEach(function(g){ if(m[g].indexOf(ad)>=0) r=g; }); return r; }
 const YON_ETIKET={eksik:'Eksik',fazla:'Fazla'};
 const DURUM_ETIKET={todo:'Yapilacak',doing:'Yapiliyor',done:'Bitti'};
 const DEFAULT_BRANCHES=[
@@ -833,6 +857,7 @@ function ayYenile(){ ayFiltreGorunum(); const h=aktifSekmeHedef();
   if(h==='sekme-pano') panoCiz();
   else if(h==='sekme-gorevler') gorevCiz();
   else if(h==='sekme-kasa') kasaCiz();
+  else if(h==='sekme-cashfark') cashFarkCiz();
   else if(h==='sekme-audit') auditCiz();
   else if(h==='sekme-rapor'){ if($('raporAy'))$('raporAy').value=aktifTum?ayBugun():aktifAy; raporCiz(); }
 }
@@ -934,7 +959,7 @@ async function logYaz(action,entity,entityId,aciklama){
 }
 
 // ================== YEDEKLEME ==================
-const YEDEK_KOLONLAR=['branches','users','shifts','dailyAudits','tasks','cashEvents','audits','photos','auditLog','personnel'];
+const YEDEK_KOLONLAR=['branches','users','shifts','dailyAudits','tasks','cashEvents','audits','photos','auditLog','personnel','cashDiff'];
 // Tum verileri JSON olarak indirir (bilgisayara kaydeder).
 async function yedekIndir(){
   const st=$('yedekDurum');const btn=$('yedekBtn');st.style.color='';st.textContent='Yedek hazirlaniyor...';btn.disabled=true;
@@ -1023,6 +1048,7 @@ const SEKME_IKON={
   'sekme-gorevler':'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   'sekme-audit':'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>',
   'sekme-kasa':'<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>',
+  'sekme-cashfark':'<circle cx="12" cy="12" r="9"/><path d="M14.5 9a2.5 2.5 0 00-2.5-1.5c-1.4 0-2.5.8-2.5 2s1.1 1.8 2.5 2 2.5.9 2.5 2-1.1 2-2.5 2A2.5 2.5 0 019.5 15M12 6v1M12 17v1"/>',
   'sekme-rota':'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   'sekme-rapor':'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/>',
   'sekme-karne':'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>',
@@ -1049,12 +1075,13 @@ function sekmeleriKur(){
     duzenlenenGorev=null;duzenlenenAudit=null;duzenlenenBahis=null;duzenlenenKasa=null;duzenlenenDenetim=null;   // sekme degisince duzenleme modundan cik
     menuKapat();   // sekme secince mobil menuyu kapat
     // Global ay filtresi cubugu sadece ilgili sekmelerde gorunur
-    const ayliMi=['sekme-pano','sekme-denetim','sekme-gorevler','sekme-audit','sekme-kasa','sekme-rapor'].indexOf(b.dataset.hedef)>=0;
+    const ayliMi=['sekme-pano','sekme-denetim','sekme-gorevler','sekme-audit','sekme-kasa','sekme-cashfark','sekme-rapor'].indexOf(b.dataset.hedef)>=0;
     const afb=$('ayFiltreBar'); if(afb) afb.classList.toggle('gizli',!ayliMi);
     if(b.dataset.hedef==='sekme-log') logCiz();
     if(b.dataset.hedef==='sekme-pano') panoCiz();
     if(b.dataset.hedef==='sekme-gorevler') gorevCiz();
     if(b.dataset.hedef==='sekme-kasa') kasaCiz();
+    if(b.dataset.hedef==='sekme-cashfark') cashFarkCiz();
     if(b.dataset.hedef==='sekme-denetim') denetimCiz();
     if(b.dataset.hedef==='sekme-audit') auditCiz();
     if(b.dataset.hedef==='sekme-rota') rotaYukle();
@@ -2525,6 +2552,77 @@ async function hataAc(el){ const o=el.parentElement; const ac=o.classList.toggle
       if(!window._kG) window._kG=[]; const gi=window._kG.push(resimler)-1;
       kutu.innerHTML='<div class="foto-galeri">'+resimler.map((d,idx)=>'<img class="foto-kucuk" src="'+esc(d||'')+'" alt="hata resmi" onclick="event.stopPropagation();lightboxAc(window._kG['+gi+'],'+idx+')">').join('')+'</div>';
     }catch(err){console.error(err);kutu.innerHTML='<span class="mini-not">Fotograflar yuklenemedi.</span>';o.dataset.yuklendi='0';} } }
+// ================== CASH DIFFERENCE (gunluk kasa farki) ==================
+// Isaretli tutar rozeti: eksik (negatif) kirmizi, fazla (pozitif) yesil.
+function cfIsaret(n){ n=Number(n)||0; if(n<0) return '<span class="zarar-rozet">-'+tl(Math.abs(n))+'</span>'; if(n>0) return '<span class="geri-rozet">+'+tl(n)+'</span>'; return '<span class="mini-not">0 TL</span>'; }
+let cfKurulu=false;
+function cashFarkKur(){ if(cfKurulu) return; const f=$('cfForm'); if(!f) return; cfKurulu=true; f.addEventListener('submit',cashFarkKaydet); }
+async function cashFarkCiz(){
+  cashFarkKur();
+  if($('cfTarih') && !$('cfTarih').value) $('cfTarih').value=bugun();
+  await personelleriYukle();
+  const per=$('cfPersonel'); if(per){ const eski=per.value; per.innerHTML=personelOptionsHTML(''); if(eski)per.value=eski; }
+  const el=$('cfIcerik'); if(!el) return; el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
+  try{
+    const s = aktifTum
+      ? await db.collection('cashDiff').orderBy('date','desc').limit(2000).get()
+      : await db.collection('cashDiff').where('date','>=',aktifAy+'-01').where('date','<=',aktifAy+'-31').orderBy('date','desc').get();
+    const kayitlar=s.docs.map(function(d){ return Object.assign({id:d.id},d.data()); }).filter(function(x){ return ayUygun(x.date); });
+    cashFarkRender(el,kayitlar);
+  }catch(err){ console.error(err); el.innerHTML='<p class="bos-satir">Kayitlar yuklenemedi. (Guvenlik kurallari henuz yayinlanmamis olabilir.)</p>'; }
+}
+function cashFarkRender(el,kayitlar){
+  const donem=aktifTum?'Tum zamanlar':('Ay: '+aktifAy);
+  if(!kayitlar.length){ el.innerHTML='<p class="mini-not">'+esc(donem)+'</p><p class="bos-satir">Bu donemde kasa farki kaydi yok.</p>'; return; }
+  const map={}; let gEksik=0,gFazla=0;
+  kayitlar.forEach(function(k){ const ad=k.personel||'(personel yok)'; if(!map[ad])map[ad]={ad:ad,kayit:0,eksik:0,fazla:0,net:0};
+    const f=Number(k.fark)||0; map[ad].kayit++; map[ad].net+=f;
+    if(f<0){ map[ad].eksik+=(-f); gEksik+=(-f); } else if(f>0){ map[ad].fazla+=f; gFazla+=f; } });
+  const satirlar=Object.keys(map).map(function(a){return map[a];}).sort(function(a,b){return a.net-b.net;});   // en cok EKSIK ustte
+  let h='<p class="mini-not">'+esc(donem)+' &middot; '+kayitlar.length+' kayit</p>';
+  h+='<h3>Aylik ozet (personel bazli)</h3>';
+  h+='<div class="ozet-satir"><span>Toplam eksik: '+(gEksik?'<span class="zarar-rozet">-'+tl(gEksik)+'</span>':'-')+'</span>'+
+     '<span>Toplam fazla: '+(gFazla?'<span class="geri-rozet">+'+tl(gFazla)+'</span>':'-')+'</span>'+
+     '<span>Net: '+cfIsaret(gFazla-gEksik)+'</span></div>';
+  h+='<table class="ozet-tablo"><thead><tr><th>Personel</th><th class="sag">Kayit</th><th class="sag">Toplam Eksik</th><th class="sag">Toplam Fazla</th><th class="sag">NET</th></tr></thead><tbody>';
+  satirlar.forEach(function(p){ h+='<tr><td class="kisi">'+esc(p.ad)+'</td><td class="sag">'+p.kayit+'</td>'+
+    '<td class="sag">'+(p.eksik?'<span class="zarar-rozet">-'+tl(p.eksik)+'</span>':'-')+'</td>'+
+    '<td class="sag">'+(p.fazla?'<span class="geri-rozet">+'+tl(p.fazla)+'</span>':'-')+'</td>'+
+    '<td class="sag">'+cfIsaret(p.net)+'</td></tr>'; });
+  h+='</tbody></table>';
+  h+='<h3>Gunluk kayitlar</h3><table class="ozet-tablo"><thead><tr><th>Tarih</th><th>Personel</th><th class="sag">Fark</th><th>Not</th><th></th></tr></thead><tbody>';
+  kayitlar.slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date));}).forEach(function(k){
+    h+='<tr><td>'+(k.date?uzunTarih(k.date):'-')+'</td><td class="kisi">'+esc(k.personel||'')+'</td>'+
+      '<td class="sag">'+cfIsaret(k.fark)+'</td><td>'+esc(k.note||'')+'</td>'+
+      '<td class="sag"><a href="javascript:void(0)" class="cf-sil" onclick="cashFarkSil(\''+esc(k.id)+'\')" title="Sil" style="color:var(--kirmizi);font-weight:700;text-decoration:none">&times;</a></td></tr>';
+  });
+  h+='</tbody></table>';
+  el.innerHTML=h;
+}
+async function cashFarkKaydet(e){
+  if(e&&e.preventDefault)e.preventDefault();
+  const h=$('cfHata'); if(h){h.style.color='';h.textContent='';}
+  const tarih=($('cfTarih').value||''); const personel=($('cfPersonel').value||'');
+  const tutar=parseFloat($('cfTutar').value); const yon=($('cfYon').value||'eksik');
+  if(!tarih){ if(h){h.style.color='var(--kirmizi)';h.textContent='Tarih secin.';} return; }
+  if(!personel){ if(h){h.style.color='var(--kirmizi)';h.textContent='Personel secin.';} return; }
+  if(!(tutar>0)){ if(h){h.style.color='var(--kirmizi)';h.textContent='0dan buyuk bir tutar girin.';} return; }
+  const fark=(yon==='eksik')?-Math.abs(tutar):Math.abs(tutar);
+  const btn=$('cfKaydet'); if(btn)btn.disabled=true;
+  try{
+    await db.collection('cashDiff').add({date:tarih,personel:personel,sube:personelSube(personel),fark:fark,note:(($('cfNot').value||'').trim()),createdBy:(auth.currentUser?auth.currentUser.uid:null),createdAt:SUNUCU_ZAMAN()});
+    await logYaz('olusturma','KasaFarki','',personel+' '+(fark<0?'-':'+')+tl(Math.abs(fark))+' ('+tarih+')');
+    $('cfTutar').value=''; $('cfNot').value='';
+    if(h){h.style.color='var(--yesil)';h.textContent='Kaydedildi.'; setTimeout(function(){ if(h){h.style.color='';h.textContent='';} },2500); }
+    await cashFarkCiz();
+  }catch(err){ console.error(err); if(h){h.style.color='var(--kirmizi)';h.textContent='Kaydedilemedi. Yetkiniz veya kurallar sorunlu olabilir.';} }
+  finally{ if(btn)btn.disabled=false; }
+}
+async function cashFarkSil(id){
+  if(typeof confirm==='function' && !confirm('Bu kasa farki kaydi silinsin mi?')) return;
+  try{ await db.collection('cashDiff').doc(id).delete(); await logYaz('silme','KasaFarki',id,'kayit silindi'); await cashFarkCiz(); }
+  catch(err){ console.error(err); const h=$('cfHata'); if(h){h.style.color='var(--kirmizi)';h.textContent='Silinemedi. Yetkiniz olmayabilir.';} }
+}
 // ===== Yeni personel ekleme (Personel Karnesi icindeki kutu) =====
 function personelEkleKur(){
   const sube=$('yeniPersonelSube'); if(!sube) return;
