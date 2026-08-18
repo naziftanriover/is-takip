@@ -358,6 +358,14 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,.s
 .cf-yon{flex:0 0 108px}
 .cf-ay{flex:0 0 auto;margin-left:auto;font-size:12px;color:var(--gri);white-space:nowrap}
 .cf-satir.dolu{background:#f6fefb}
+.cf-gun{border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);margin:8px 0;overflow:hidden}
+.cf-gun-bas{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;background:#fff;font-size:14px}
+.cf-gun-bas:hover{background:var(--renk-tint)}
+.cf-gun-ok{color:var(--renk-ana);font-size:11px}
+.cf-gun-net{margin-left:auto;white-space:nowrap;font-size:13px}
+.cf-gun-govde{display:none;border-top:1px solid var(--renk-cizgi)}
+.cf-gun.acik .cf-gun-govde{display:block}
+.cf-gun-govde .ozet-tablo{margin:0}
 input.cf-tutar::-webkit-outer-spin-button,input.cf-tutar::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 @media(max-width:640px){.cf-ad{flex:0 0 96px;font-size:13px}.cf-tutar{flex:0 0 74px}.cf-yon{flex:0 0 96px}.cf-ay{font-size:11px}}
 /* --- Sol menu / ust bar cilasi --- */
@@ -2693,15 +2701,26 @@ function cashFarkRender(el,kayitlar){
     '<td class="sag">'+(p.fazla?'<span class="geri-rozet">+'+tl(p.fazla)+'</span>':'-')+'</td>'+
     '<td class="sag">'+cfIsaret(p.net)+'</td></tr>'; });
   h+='</tbody></table>';
-  h+='<h3>Gunluk kayitlar</h3><table class="ozet-tablo"><thead><tr><th>Tarih</th><th>Personel</th><th class="sag">Fark</th><th>Not</th><th></th></tr></thead><tbody>';
-  kayitlar.slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date));}).forEach(function(k){
-    h+='<tr><td>'+(k.date?uzunTarih(k.date):'-')+'</td><td class="kisi">'+esc(k.personel||'')+'</td>'+
-      '<td class="sag">'+cfIsaret(k.fark)+'</td><td>'+esc(k.note||'')+'</td>'+
-      '<td class="sag"><a href="javascript:void(0)" class="cf-sil" onclick="cashFarkSil(\''+esc(k.id)+'\')" title="Sil" style="color:var(--kirmizi);font-weight:700;text-decoration:none">&times;</a></td></tr>';
+  // Gunluk kayitlar: TARIH TARIH acilir/kapanir (ay boyu sismesin)
+  h+='<h3>Gunluk kayitlar (tarihe tikla ac/kapa)</h3>';
+  const gunler={}; kayitlar.forEach(function(k){ const d=k.date||''; if(!gunler[d])gunler[d]=[]; gunler[d].push(k); });
+  const gunSirali=Object.keys(gunler).sort(function(a,b){return String(b).localeCompare(String(a));});   // en yeni gun ustte
+  gunSirali.forEach(function(d){
+    const list=gunler[d]; let net=0,eks=0,faz=0; list.forEach(function(x){ const f=Number(x.fark)||0; net+=f; if(f<0)eks+=(-f); else if(f>0)faz+=f; });
+    h+='<div class="cf-gun"><div class="cf-gun-bas" onclick="cfGunAc(this)"><span class="cf-gun-ok">&#9654;</span>'+
+       '<b>'+(d?uzunTarih(d):'-')+'</b><span class="mini-not">'+list.length+' kayit</span>'+
+       '<span class="cf-gun-net">'+(eks?'<span class="zarar-rozet">-'+tl(eks)+'</span>':'')+(faz?'<span class="geri-rozet">+'+tl(faz)+'</span>':'')+' &nbsp;net '+cfIsaret(net)+'</span></div>'+
+       '<div class="cf-gun-govde"><table class="ozet-tablo"><tbody>';
+    list.slice().sort(function(a,b){return String(a.personel||'').localeCompare(String(b.personel||''),'tr');}).forEach(function(k){
+      h+='<tr><td class="kisi">'+esc(k.personel||'')+'</td><td class="sag">'+cfIsaret(k.fark)+'</td><td>'+esc(k.note||'')+'</td>'+
+        '<td class="sag"><a href="javascript:void(0)" class="cf-sil" onclick="event.stopPropagation();cashFarkSil(\''+esc(k.id)+'\')" title="Sil" style="color:var(--kirmizi);font-weight:700;text-decoration:none">&times;</a></td></tr>';
+    });
+    h+='</tbody></table></div></div>';
   });
-  h+='</tbody></table>';
   el.innerHTML=h;
 }
+// Cash diff gunluk grup ac/kapat
+function cfGunAc(el){ const g=el.parentElement; const ac=g.classList.toggle('acik'); const ok=el.querySelector('.cf-gun-ok'); if(ok)ok.innerHTML=ac?'&#9660;':'&#9654;'; }
 async function cashFarkSil(id){
   if(typeof confirm==='function' && !confirm('Bu kasa farki kaydi silinsin mi?')) return;
   try{ await db.collection('cashDiff').doc(id).delete(); await logYaz('silme','KasaFarki',id,'kayit silindi'); await cashFarkCiz(); }
