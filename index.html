@@ -366,6 +366,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,.s
 .cf-gun-govde{display:none;border-top:1px solid var(--renk-cizgi)}
 .cf-gun.acik .cf-gun-govde{display:block}
 .cf-gun-govde .ozet-tablo{margin:0}
+/* Cash Difference: sol=gunluk giris, sag=aylik rapor (2 ayri cerceve) */
+.cf-duzen{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.cf-panel{border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);background:#fff;padding:16px;box-shadow:var(--golge)}
+.cf-sol{flex:0 0 auto}
+.cf-sag{flex:1 1 440px;min-width:320px}
+.cf-panel .cf-grup{margin-top:8px}
+@media(max-width:900px){.cf-duzen{flex-direction:column}.cf-sol,.cf-sag{width:100%}}
 input.cf-tutar::-webkit-outer-spin-button,input.cf-tutar::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 @media(max-width:640px){.cf-ad{flex:0 0 96px;font-size:13px}.cf-tutar{flex:0 0 74px}.cf-yon{flex:0 0 96px}.cf-ay{font-size:11px}}
 /* --- Sol menu / ust bar cilasi --- */
@@ -592,15 +599,21 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
     <section id="sekme-cashfark" class="sekme-bolum gizli">
       <h2>Cash Difference (Gunluk Kasa Farki)</h2>
       <p class="alt-baslik">Sectiginiz gun icin her personelin kasa farkini kutuya yazin (bos = fark yok). Enter ile bir alttaki kutuya gecer. Eksik (-) / Fazla (+). Kaydet o gune yazar; tekrar acinca duzenlenebilir.</p>
-      <div id="cfArac" class="cf-arac">
-        <div class="alan"><label>Gun (tarih)</label><input id="cfTarih" type="date" /></div>
-        <button id="cfKaydet" type="button">Kaydet</button>
-        <span id="cfHata" class="hata-mesaji"></span>
+      <div class="cf-duzen">
+        <div class="cf-panel cf-sol">
+          <h3 style="margin-top:0">Gunluk giris</h3>
+          <div id="cfArac" class="cf-arac">
+            <div class="alan"><label>Gun (tarih)</label><input id="cfTarih" type="date" /></div>
+            <button id="cfKaydet" type="button">Kaydet</button>
+            <span id="cfHata" class="hata-mesaji"></span>
+          </div>
+          <div id="cfGrid"></div>
+        </div>
+        <div class="cf-panel cf-sag">
+          <h3 style="margin-top:0">Aylik rapor</h3>
+          <div id="cfIcerik"><p class="bos-satir">Yukleniyor...</p></div>
+        </div>
       </div>
-      <div id="cfGrid"></div>
-      <hr style="border:none;border-top:1px solid var(--renk-cizgi);margin:20px 0" />
-      <h3>Aylik rapor</h3>
-      <div id="cfIcerik"><p class="bos-satir">Yukleniyor...</p></div>
     </section>
 
     <!-- ROTA -->
