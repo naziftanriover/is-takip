@@ -366,6 +366,17 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,.s
 .cf-gun-govde{display:none;border-top:1px solid var(--renk-cizgi)}
 .cf-gun.acik .cf-gun-govde{display:block}
 .cf-gun-govde .ozet-tablo{margin:0}
+/* Cezalar paneli (isim isim ceza listesi) */
+.cez-kisi{border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);margin:10px 0;overflow:hidden;box-shadow:var(--golge)}
+.cez-kisi-bas{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:#fff}
+.cez-kisi-bas:hover{background:var(--renk-tint)}
+.cez-ok{color:var(--renk-ana);font-size:11px}
+.cez-pdf{margin-left:auto;flex:0 0 auto;padding:5px 10px;font-size:12px}
+.cez-govde{display:none;border-top:1px solid var(--renk-cizgi);overflow-x:auto}
+.cez-govde.acik{display:block}
+.cez-govde .ozet-tablo{margin:0;font-size:13px}
+.cez-govde .ozet-tablo td{vertical-align:top}
+@media(max-width:640px){.cez-govde .ozet-tablo{font-size:12px}}
 /* Cash Difference: sol=gunluk giris, sag=aylik rapor (2 ayri cerceve) */
 .cf-duzen{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
 .cf-panel{border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);background:#fff;padding:16px;box-shadow:var(--golge)}
@@ -465,6 +476,7 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
     <button class="sekme-btn" data-hedef="sekme-rota" type="button">Rota</button>
     <button class="sekme-btn" data-hedef="sekme-rapor" type="button">Aylik Rapor</button>
     <button class="sekme-btn" data-hedef="sekme-karne" type="button">Personel Karnesi</button>
+    <button class="sekme-btn" data-hedef="sekme-cezalar" type="button">Cezalar</button>
     <button class="sekme-btn ceza-btn" data-hedef="sekme-ceza" type="button">Ceza</button>
     <button class="sekme-btn" data-hedef="sekme-log" type="button">Denetim Izi</button>
     <button class="sekme-btn" data-hedef="sekme-subeler" type="button">Subeler</button>
@@ -696,6 +708,13 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
       <div id="cezaIcerik"><p class="bos-satir">Yukleniyor...</p></div>
     </section>
 
+    <!-- CEZALAR (ceza alinan bahisler, isim isim, PDF) -->
+    <section id="sekme-cezalar" class="sekme-bolum gizli">
+      <h2>Cezalar</h2>
+      <p class="alt-baslik">Sadece ceza yazilmis hatalar. Isim isim ayrilir; ticket no + hatanin ne oldugu + aciklama gorunur. Personele gostermek icin PDF alabilirsiniz.</p>
+      <div id="cezalarIcerik"><p class="bos-satir">Yukleniyor...</p></div>
+    </section>
+
     <!-- DENETIM IZI -->
     <section id="sekme-log" class="sekme-bolum gizli">
       <h2>Denetim Izi (kim ne yapti)</h2>
@@ -890,6 +909,7 @@ function ayYenile(){ ayFiltreGorunum(); const h=aktifSekmeHedef();
   else if(h==='sekme-cashfark') cashFarkCiz();
   else if(h==='sekme-audit') auditCiz();
   else if(h==='sekme-rapor'){ if($('raporAy'))$('raporAy').value=aktifTum?ayBugun():aktifAy; raporCiz(); }
+  else if(h==='sekme-cezalar') cezalarCiz();
 }
 // Element-tabanli kisi secim (inline duzenleme formlari icin; id gerektirmez)
 function kisiSecimEl(secili){ const el=document.createElement('div'); el.className='kisi-secim'; const sec=Array.isArray(secili)?secili:[];
@@ -1083,6 +1103,7 @@ const SEKME_IKON={
   'sekme-rapor':'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/>',
   'sekme-karne':'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   'sekme-ceza':'<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',
+  'sekme-cezalar':'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>',
   'sekme-log':'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
   'sekme-subeler':'<path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/>',
   'sekme-yedek':'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>'
@@ -1105,7 +1126,7 @@ function sekmeleriKur(){
     duzenlenenGorev=null;duzenlenenAudit=null;duzenlenenBahis=null;duzenlenenKasa=null;duzenlenenDenetim=null;   // sekme degisince duzenleme modundan cik
     menuKapat();   // sekme secince mobil menuyu kapat
     // Global ay filtresi cubugu sadece ilgili sekmelerde gorunur
-    const ayliMi=['sekme-pano','sekme-denetim','sekme-gorevler','sekme-audit','sekme-kasa','sekme-cashfark','sekme-rapor'].indexOf(b.dataset.hedef)>=0;
+    const ayliMi=['sekme-pano','sekme-denetim','sekme-gorevler','sekme-audit','sekme-kasa','sekme-cashfark','sekme-rapor','sekme-cezalar'].indexOf(b.dataset.hedef)>=0;
     const afb=$('ayFiltreBar'); if(afb) afb.classList.toggle('gizli',!ayliMi);
     if(b.dataset.hedef==='sekme-log') logCiz();
     if(b.dataset.hedef==='sekme-pano') panoCiz();
@@ -1117,6 +1138,7 @@ function sekmeleriKur(){
     if(b.dataset.hedef==='sekme-rota') rotaYukle();
     if(b.dataset.hedef==='sekme-rapor') raporCiz();
     if(b.dataset.hedef==='sekme-karne') karneCiz();
+    if(b.dataset.hedef==='sekme-cezalar') cezalarCiz();
     if(b.dataset.hedef==='sekme-ceza') cezaCiz();
     if(b.dataset.hedef==='sekme-subeler') subeCiz();
   }));
@@ -2868,6 +2890,72 @@ async function karneCiz(){
     h+='</tbody></table></div>';
     el.innerHTML=h;
   }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Karne yuklenemedi.</p>';}
+}
+// ================== CEZALAR (ceza yazilmis hatalar, isim isim, PDF) ==================
+let cezalarSonVeri=[];   // PDF fonksiyonlari bunu kullanir
+async function cezalarCiz(){
+  const el=$('cezalarIcerik'); if(!el) return;
+  el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
+  const scope={tum:aktifTum,ay:aktifAy};
+  try{
+    const liste=await karneTopla(scope,{fotosuz:true});
+    const veri=[];
+    liste.forEach(function(p){
+      const cezali=(p.hatalar||[]).filter(function(x){return (Number(x.ceza)||0)>0;});
+      if(!cezali.length) return;
+      const toplam=cezali.reduce(function(s,x){return s+(Number(x.ceza)||0);},0);
+      veri.push({ad:p.ad,toplamCeza:toplam,items:cezali});
+    });
+    veri.sort(function(a,b){return b.toplamCeza-a.toplamCeza||a.ad.localeCompare(b.ad,'tr');});
+    cezalarSonVeri=veri;
+    const donem=scope.tum?'Tum zamanlar':('Ay: '+aktifAy);
+    if(!veri.length){ el.innerHTML='<p class="mini-not">'+esc(donem)+'</p><p class="bos-satir">Bu donemde ceza yazilmis hata yok.</p>'; return; }
+    const gToplam=veri.reduce(function(s,p){return s+p.toplamCeza;},0);
+    let h='<p class="mini-not">'+esc(donem)+' &middot; '+veri.length+' personel &middot; toplam <b>'+saat(gToplam)+'</b> ceza</p>';
+    h+='<div style="margin:6px 0 12px"><button type="button" class="pdf-btn" onclick="cezalarPdfTum()">&#128424; Tum liste PDF / Yazdir</button></div>';
+    veri.forEach(function(p,i){
+      h+='<div class="cez-kisi"><div class="cez-kisi-bas" onclick="cezKisiAc(this)"><span class="cez-ok">&#9660;</span>'+
+         '<b>'+esc(p.ad)+'</b><span class="ceza-rozet">'+saat(p.toplamCeza)+'</span><span class="mini-not">'+p.items.length+' hata</span>'+
+         '<button type="button" class="pdf-btn cez-pdf" onclick="event.stopPropagation();cezalarPdfKisi('+i+')">&#128424; PDF</button></div>'+
+         '<div class="cez-govde acik">'+cezalarKisiTabloHTML(p)+'</div></div>';
+    });
+    el.innerHTML=h;
+  }catch(err){ console.error(err); el.innerHTML='<p class="bos-satir">Cezalar yuklenemedi.</p>'; }
+}
+function cezalarKisiTabloHTML(p){
+  let h='<table class="ozet-tablo"><thead><tr><th>Tarih</th><th>Kaynak</th><th>Sube</th><th>Ticket / Hata</th><th>Aciklama</th><th class="sag">Ceza</th></tr></thead><tbody>';
+  p.items.slice().sort(function(a,b){return String(b.tarih).localeCompare(String(a.tarih));}).forEach(function(x){
+    h+='<tr><td>'+(x.tarih?uzunTarih(x.tarih):'-')+'</td><td>'+esc(x.kaynakAd||'')+'</td><td>'+esc(x.sube||'')+'</td>'+
+       '<td>'+esc(x.baslik||'')+'</td><td>'+(x.aciklama?esc(x.aciklama):'<span class="mini-not">-</span>')+'</td>'+
+       '<td class="sag"><span class="ceza-rozet">'+saat(x.ceza)+'</span></td></tr>';
+  });
+  h+='</tbody></table>';
+  return h;
+}
+function cezKisiAc(el){ const g=el.parentElement; const gv=g.querySelector('.cez-govde'); if(!gv)return; const ac=gv.classList.toggle('acik'); const ok=el.querySelector('.cez-ok'); if(ok)ok.innerHTML=ac?'&#9660;':'&#9654;'; }
+// PDF: ceza bildirimi (resimsiz; ticket + hata + aciklama + ceza)
+function cezalarPdfIc(veri){
+  let ic='';
+  veri.forEach(function(p){
+    ic+='<div class="pano-kart"><h3>'+esc(p.ad)+' &mdash; toplam '+saat(p.toplamCeza)+' ceza</h3>';
+    ic+='<table class="karne-tablo"><thead><tr><th>Tarih</th><th>Kaynak</th><th>Sube</th><th>Ticket / Hata</th><th>Aciklama</th><th class="sag">Ceza</th></tr></thead><tbody>';
+    p.items.slice().sort(function(a,b){return String(b.tarih).localeCompare(String(a.tarih));}).forEach(function(x){
+      ic+='<tr><td>'+(x.tarih?uzunTarih(x.tarih):'-')+'</td><td>'+esc(x.kaynakAd||'')+'</td><td>'+esc(x.sube||'')+'</td>'+
+         '<td>'+esc(x.baslik||'')+'</td><td>'+esc(x.aciklama||'')+'</td><td class="sag karne-ceza">'+saat(x.ceza)+'</td></tr>';
+    });
+    ic+='</tbody></table></div>';
+  });
+  return ic;
+}
+function cezalarPdfTum(){
+  if(!cezalarSonVeri.length){ if(typeof alert==='function')alert('Once liste yuklensin.'); return; }
+  const donem=aktifTum?'Tum zamanlar':('Donem: '+aktifAy);
+  yaziciCik('Ceza Listesi (Tum Personel)',donem,cezalarPdfIc(cezalarSonVeri),false);
+}
+function cezalarPdfKisi(i){
+  const p=cezalarSonVeri[i]; if(!p){ if(typeof alert==='function')alert('Kayit bulunamadi.'); return; }
+  const donem=aktifTum?'Tum zamanlar':('Donem: '+aktifAy);
+  yaziciCik('Ceza Bildirimi - '+p.ad,donem,cezalarPdfIc([p]),false);
 }
 // ================== CEZA GIRISI (BOLGE MUDURU) ==================
 // Tum hatalari (gunluk denetim yanlislari + hatali bahisler + kamera) kaynak referansiyla toplar.
