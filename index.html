@@ -2904,18 +2904,20 @@ async function cezalarCiz(){
       const cezali=(p.hatalar||[]).filter(function(x){return (Number(x.ceza)||0)>0;});
       if(!cezali.length) return;
       const toplam=cezali.reduce(function(s,x){return s+(Number(x.ceza)||0);},0);
-      veri.push({ad:p.ad,toplamCeza:toplam,items:cezali});
+      const toplamZarar=cezali.reduce(function(s,x){return s+(Number(x.zarar)||0);},0);
+      veri.push({ad:p.ad,toplamCeza:toplam,toplamZarar:toplamZarar,items:cezali});
     });
     veri.sort(function(a,b){return b.toplamCeza-a.toplamCeza||a.ad.localeCompare(b.ad,'tr');});
     cezalarSonVeri=veri;
     const donem=scope.tum?'Tum zamanlar':('Ay: '+aktifAy);
     if(!veri.length){ el.innerHTML='<p class="mini-not">'+esc(donem)+'</p><p class="bos-satir">Bu donemde ceza yazilmis hata yok.</p>'; return; }
     const gToplam=veri.reduce(function(s,p){return s+p.toplamCeza;},0);
-    let h='<p class="mini-not">'+esc(donem)+' &middot; '+veri.length+' personel &middot; toplam <b>'+saat(gToplam)+'</b> ceza</p>';
+    const gZarar=veri.reduce(function(s,p){return s+p.toplamZarar;},0);
+    let h='<p class="mini-not">'+esc(donem)+' &middot; '+veri.length+' personel &middot; toplam <b>'+saat(gToplam)+'</b> ceza &middot; sirkete ugratilan zarar <b class="'+tutarSinif(gZarar)+'">'+tl(gZarar)+'</b></p>';
     h+='<div style="margin:6px 0 12px"><button type="button" class="pdf-btn" onclick="cezalarPdfTum()">&#128424; Tum liste PDF / Yazdir</button></div>';
     veri.forEach(function(p,i){
       h+='<div class="cez-kisi"><div class="cez-kisi-bas" onclick="cezKisiAc(this)"><span class="cez-ok">&#9660;</span>'+
-         '<b>'+esc(p.ad)+'</b><span class="ceza-rozet">'+saat(p.toplamCeza)+'</span><span class="mini-not">'+p.items.length+' hata</span>'+
+         '<b>'+esc(p.ad)+'</b><span class="ceza-rozet">'+saat(p.toplamCeza)+'</span>'+(p.toplamZarar?'<span class="zarar-rozet">'+tl(p.toplamZarar)+'</span>':'')+'<span class="mini-not">'+p.items.length+' hata</span>'+
          '<button type="button" class="pdf-btn cez-pdf" onclick="event.stopPropagation();cezalarPdfKisi('+i+')">&#128424; PDF</button></div>'+
          '<div class="cez-govde acik">'+cezalarKisiTabloHTML(p)+'</div></div>';
     });
@@ -2923,10 +2925,11 @@ async function cezalarCiz(){
   }catch(err){ console.error(err); el.innerHTML='<p class="bos-satir">Cezalar yuklenemedi.</p>'; }
 }
 function cezalarKisiTabloHTML(p){
-  let h='<table class="ozet-tablo"><thead><tr><th>Tarih</th><th>Kaynak</th><th>Sube</th><th>Ticket / Hata</th><th>Aciklama</th><th class="sag">Ceza</th></tr></thead><tbody>';
+  let h='<table class="ozet-tablo"><thead><tr><th>Tarih</th><th>Kaynak</th><th>Sube</th><th>Ticket / Hata</th><th>Aciklama</th><th class="sag">Zarar</th><th class="sag">Ceza</th></tr></thead><tbody>';
   p.items.slice().sort(function(a,b){return String(b.tarih).localeCompare(String(a.tarih));}).forEach(function(x){
     h+='<tr><td>'+(x.tarih?uzunTarih(x.tarih):'-')+'</td><td>'+esc(x.kaynakAd||'')+'</td><td>'+esc(x.sube||'')+'</td>'+
        '<td>'+esc(x.baslik||'')+'</td><td>'+(x.aciklama?esc(x.aciklama):'<span class="mini-not">-</span>')+'</td>'+
+       '<td class="sag">'+((Number(x.zarar)||0)?'<span class="zarar-rozet">'+tl(x.zarar)+'</span>':'<span class="mini-not">-</span>')+'</td>'+
        '<td class="sag"><span class="ceza-rozet">'+saat(x.ceza)+'</span></td></tr>';
   });
   h+='</tbody></table>';
@@ -2937,11 +2940,11 @@ function cezKisiAc(el){ const g=el.parentElement; const gv=g.querySelector('.cez
 function cezalarPdfIc(veri){
   let ic='';
   veri.forEach(function(p){
-    ic+='<div class="pano-kart"><h3>'+esc(p.ad)+' &mdash; toplam '+saat(p.toplamCeza)+' ceza</h3>';
-    ic+='<table class="karne-tablo"><thead><tr><th>Tarih</th><th>Kaynak</th><th>Sube</th><th>Ticket / Hata</th><th>Aciklama</th><th class="sag">Ceza</th></tr></thead><tbody>';
+    ic+='<div class="pano-kart"><h3>'+esc(p.ad)+' &mdash; toplam '+saat(p.toplamCeza)+' ceza'+(p.toplamZarar?(' &middot; sirkete zarar '+tl(p.toplamZarar)):'')+'</h3>';
+    ic+='<table class="karne-tablo"><thead><tr><th>Tarih</th><th>Kaynak</th><th>Sube</th><th>Ticket / Hata</th><th>Aciklama</th><th class="sag">Zarar</th><th class="sag">Ceza</th></tr></thead><tbody>';
     p.items.slice().sort(function(a,b){return String(b.tarih).localeCompare(String(a.tarih));}).forEach(function(x){
       ic+='<tr><td>'+(x.tarih?uzunTarih(x.tarih):'-')+'</td><td>'+esc(x.kaynakAd||'')+'</td><td>'+esc(x.sube||'')+'</td>'+
-         '<td>'+esc(x.baslik||'')+'</td><td>'+esc(x.aciklama||'')+'</td><td class="sag karne-ceza">'+saat(x.ceza)+'</td></tr>';
+         '<td>'+esc(x.baslik||'')+'</td><td>'+esc(x.aciklama||'')+'</td><td class="sag karne-zarar">'+((Number(x.zarar)||0)?tl(x.zarar):'-')+'</td><td class="sag karne-ceza">'+saat(x.ceza)+'</td></tr>';
     });
     ic+='</tbody></table></div>';
   });
