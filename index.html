@@ -275,7 +275,8 @@ body.salt-okunur #gForm, body.salt-okunur #denetimForm, body.salt-okunur #kForm,
 body.salt-okunur .foto-yuk, body.salt-okunur .bahis-arac, body.salt-okunur .satir-arac, body.salt-okunur .yeni-bahis,
 body.salt-okunur #rKaydet, body.salt-okunur #rOnceki, body.salt-okunur #rSonraki,
 body.salt-okunur #sKur, body.salt-okunur #sAdmin, body.salt-okunur #personelEkleKutu,
-body.salt-okunur #cfArac, body.salt-okunur #cfGrid, body.salt-okunur .cf-sil, body.salt-okunur .karne-ceza-ed{display:none!important}
+body.salt-okunur #cfArac, body.salt-okunur #cfGrid, body.salt-okunur .cf-sil, body.salt-okunur .karne-ceza-ed,
+body.salt-okunur #disiplinKutu, body.salt-okunur .dc-sil{display:none!important}
 body.salt-okunur .rota-tablo select{pointer-events:none}
 body.salt-okunur #kullaniciAdi{font-weight:700}
 /* Ceza (bolge muduru) modu: Ceza sekmesi sadece bu modda gorunur; ceza panel kontrolleri salt-okunur'dan etkilenmez */
@@ -712,6 +713,20 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
     <section id="sekme-cezalar" class="sekme-bolum gizli">
       <h2>Cezalar</h2>
       <p class="alt-baslik">Sadece ceza yazilmis hatalar. Isim isim ayrilir; ticket no + hatanin ne oldugu + aciklama gorunur. Personele gostermek icin PDF alabilirsiniz.</p>
+      <div id="disiplinKutu" class="kart-form">
+        <details>
+          <summary style="cursor:pointer;font-weight:600;color:var(--renk-ana-koyu)">&#43; Disiplin / davranis cezasi ekle (bahis disi)</summary>
+          <p class="mini-not" style="margin:6px 0">Bahis hatasi disindaki cezalar icin (or. sakal uzun, kilik-kiyafet, disiplin sucu). Aciklama + ceza saati girin; personelin ceza listesinde gorunur.</p>
+          <div class="form-satir">
+            <div class="alan"><label>Personel</label><select id="dcPersonel"></select></div>
+            <div class="alan"><label>Tarih</label><input id="dcTarih" type="date" /></div>
+            <div class="alan"><label>Ceza (saat)</label><input id="dcSaat" type="number" min="0" step="0.5" placeholder="or. 4" /></div>
+          </div>
+          <div class="alan" style="flex:1 1 100%"><label>Aciklama</label><input id="dcAciklama" type="text" autocomplete="off" placeholder="or. Sakal uzun - uyariya ragmen" /></div>
+          <p id="dcHata" class="hata-mesaji"></p>
+          <button id="dcEkle" type="button">Disiplin cezasi ekle</button>
+        </details>
+      </div>
       <div id="cezalarIcerik"><p class="bos-satir">Yukleniyor...</p></div>
     </section>
 
@@ -1009,7 +1024,7 @@ async function logYaz(action,entity,entityId,aciklama){
 }
 
 // ================== YEDEKLEME ==================
-const YEDEK_KOLONLAR=['branches','users','shifts','dailyAudits','tasks','cashEvents','audits','photos','auditLog','personnel','cashDiff'];
+const YEDEK_KOLONLAR=['branches','users','shifts','dailyAudits','tasks','cashEvents','audits','photos','auditLog','personnel','cashDiff','disiplinCeza'];
 // Tum verileri JSON olarak indirir (bilgisayara kaydeder).
 async function yedekIndir(){
   const st=$('yedekDurum');const btn=$('yedekBtn');st.style.color='';st.textContent='Yedek hazirlaniyor...';btn.disabled=true;
@@ -2893,31 +2908,70 @@ async function karneCiz(){
 }
 // ================== CEZALAR (ceza yazilmis hatalar, isim isim, PDF) ==================
 let cezalarSonVeri=[];   // PDF fonksiyonlari bunu kullanir
+// Disiplin/davranis cezalarini secili doneme gore ceker.
+async function disiplinGetir(scope){
+  try{
+    const s = scope.tum
+      ? await db.collection('disiplinCeza').orderBy('date','desc').limit(2000).get()
+      : await db.collection('disiplinCeza').where('date','>=',scope.ay+'-01').where('date','<=',scope.ay+'-31').orderBy('date','desc').get();
+    return s.docs.map(function(d){return Object.assign({id:d.id},d.data());}).filter(function(x){return scope.tum||String(x.date||'').slice(0,7)===scope.ay;});
+  }catch(e){ console.error('disiplin yuklenemedi',e); return []; }
+}
+let disiplinKurulu=false;
+function disiplinKur(){
+  const sel=$('dcPersonel'); if(sel){ const eski=sel.value; sel.innerHTML=personelOptionsHTML(''); if(eski)sel.value=eski; }
+  if($('dcTarih') && !$('dcTarih').value) $('dcTarih').value=bugun();
+  if(disiplinKurulu) return; const btn=$('dcEkle'); if(!btn) return; disiplinKurulu=true; btn.addEventListener('click',disiplinCezaKaydet);
+}
+async function disiplinCezaKaydet(){
+  const h=$('dcHata'); if(h){h.style.color='';h.textContent='';}
+  const personel=($('dcPersonel').value||''); const date=($('dcTarih').value||''); const ceza=parseFloat($('dcSaat').value); const aciklama=($('dcAciklama').value||'').trim();
+  if(!personel){ if(h){h.style.color='var(--kirmizi)';h.textContent='Personel secin.';} return; }
+  if(!date){ if(h){h.style.color='var(--kirmizi)';h.textContent='Tarih secin.';} return; }
+  if(!(ceza>0)){ if(h){h.style.color='var(--kirmizi)';h.textContent='Ceza saati girin (0dan buyuk).';} return; }
+  if(!aciklama){ if(h){h.style.color='var(--kirmizi)';h.textContent='Aciklama girin (or. sakal uzun, disiplin sucu).';} return; }
+  const btn=$('dcEkle'); if(btn)btn.disabled=true;
+  try{
+    await db.collection('disiplinCeza').add({personel:personel,date:date,aciklama:aciklama,ceza:ceza,createdBy:(auth.currentUser?auth.currentUser.uid:null),createdAt:SUNUCU_ZAMAN()});
+    await logYaz('olusturma','DisiplinCeza','',personel+' '+saat(ceza)+' - '+aciklama);
+    $('dcSaat').value=''; $('dcAciklama').value='';
+    if(h){h.style.color='var(--yesil)';h.textContent=personel+' icin disiplin cezasi eklendi.'; setTimeout(function(){if(h){h.style.color='';h.textContent='';}},2500);}
+    await cezalarCiz();
+  }catch(err){ console.error(err); if(h){h.style.color='var(--kirmizi)';h.textContent='Eklenemedi. Yetkiniz veya kurallar sorunlu olabilir.';} }
+  finally{ if(btn)btn.disabled=false; }
+}
+async function disiplinCezaSil(id){
+  if(typeof confirm==='function' && !confirm('Bu disiplin cezasi silinsin mi?')) return;
+  try{ await db.collection('disiplinCeza').doc(id).delete(); await logYaz('silme','DisiplinCeza',id,'disiplin cezasi silindi'); await cezalarCiz(); }
+  catch(err){ console.error(err); const h=$('dcHata'); if(h){h.style.color='var(--kirmizi)';h.textContent='Silinemedi. Yetkiniz olmayabilir.';} }
+}
 async function cezalarCiz(){
   const el=$('cezalarIcerik'); if(!el) return;
   el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
+  await personelleriYukle(); disiplinKur();
   const scope={tum:aktifTum,ay:aktifAy};
   try{
-    const liste=await karneTopla(scope,{fotosuz:true});
-    const veri=[];
-    liste.forEach(function(p){
-      const cezali=(p.hatalar||[]).filter(function(x){return (Number(x.ceza)||0)>0;});
-      if(!cezali.length) return;
-      const toplam=cezali.reduce(function(s,x){return s+(Number(x.ceza)||0);},0);
-      const toplamZarar=cezali.reduce(function(s,x){return s+(Number(x.zarar)||0);},0);
-      veri.push({ad:p.ad,toplamCeza:toplam,toplamZarar:toplamZarar,items:cezali});
-    });
+    const sonuc=await Promise.all([ karneTopla(scope,{fotosuz:true}), disiplinGetir(scope) ]);
+    const liste=sonuc[0], disiplin=sonuc[1];
+    const map={};
+    const al=function(ad){ if(!map[ad]) map[ad]={ad:ad,items:[]}; return map[ad]; };
+    liste.forEach(function(p){ (p.hatalar||[]).forEach(function(x){ if((Number(x.ceza)||0)>0) al(p.ad).items.push(x); }); });
+    disiplin.forEach(function(d){ if(!d.personel) return;
+      al(d.personel).items.push({kaynak:'disiplin',kaynakAd:'Disiplin',tarih:d.date||'',sube:'',baslik:'Disiplin / davranis',aciklama:d.aciklama||'',zarar:0,ceza:Number(d.ceza)||0,_id:d.id,_disiplin:true}); });
+    const veri=Object.keys(map).map(function(ad){ const it=map[ad].items;
+      return {ad:ad,items:it,toplamCeza:it.reduce(function(s,x){return s+(Number(x.ceza)||0);},0),toplamZarar:it.reduce(function(s,x){return s+(Number(x.zarar)||0);},0)};
+    }).filter(function(p){return p.items.length>0;});
     veri.sort(function(a,b){return b.toplamCeza-a.toplamCeza||a.ad.localeCompare(b.ad,'tr');});
     cezalarSonVeri=veri;
     const donem=scope.tum?'Tum zamanlar':('Ay: '+aktifAy);
-    if(!veri.length){ el.innerHTML='<p class="mini-not">'+esc(donem)+'</p><p class="bos-satir">Bu donemde ceza yazilmis hata yok.</p>'; return; }
+    if(!veri.length){ el.innerHTML='<p class="mini-not">'+esc(donem)+'</p><p class="bos-satir">Bu donemde ceza kaydi yok.</p>'; return; }
     const gToplam=veri.reduce(function(s,p){return s+p.toplamCeza;},0);
     const gZarar=veri.reduce(function(s,p){return s+p.toplamZarar;},0);
     let h='<p class="mini-not">'+esc(donem)+' &middot; '+veri.length+' personel &middot; toplam <b>'+saat(gToplam)+'</b> ceza &middot; sirkete ugratilan zarar <b class="'+tutarSinif(gZarar)+'">'+tl(gZarar)+'</b></p>';
     h+='<div style="margin:6px 0 12px"><button type="button" class="pdf-btn" onclick="cezalarPdfTum()">&#128424; Tum liste PDF / Yazdir</button></div>';
     veri.forEach(function(p,i){
       h+='<div class="cez-kisi"><div class="cez-kisi-bas" onclick="cezKisiAc(this)"><span class="cez-ok">&#9660;</span>'+
-         '<b>'+esc(p.ad)+'</b><span class="ceza-rozet">'+saat(p.toplamCeza)+'</span>'+(p.toplamZarar?'<span class="zarar-rozet">'+tl(p.toplamZarar)+'</span>':'')+'<span class="mini-not">'+p.items.length+' hata</span>'+
+         '<b>'+esc(p.ad)+'</b><span class="ceza-rozet">'+saat(p.toplamCeza)+'</span>'+(p.toplamZarar?'<span class="zarar-rozet">'+tl(p.toplamZarar)+'</span>':'')+'<span class="mini-not">'+p.items.length+' kayit</span>'+
          '<button type="button" class="pdf-btn cez-pdf" onclick="event.stopPropagation();cezalarPdfKisi('+i+')">&#128424; PDF</button></div>'+
          '<div class="cez-govde acik">'+cezalarKisiTabloHTML(p)+'</div></div>';
     });
@@ -2925,12 +2979,15 @@ async function cezalarCiz(){
   }catch(err){ console.error(err); el.innerHTML='<p class="bos-satir">Cezalar yuklenemedi.</p>'; }
 }
 function cezalarKisiTabloHTML(p){
-  let h='<table class="ozet-tablo"><thead><tr><th>Tarih</th><th>Kaynak</th><th>Sube</th><th>Ticket / Hata</th><th>Aciklama</th><th class="sag">Zarar</th><th class="sag">Ceza</th></tr></thead><tbody>';
+  let h='<table class="ozet-tablo"><thead><tr><th>Tarih</th><th>Kaynak</th><th>Sube</th><th>Ticket / Hata</th><th>Aciklama</th><th class="sag">Zarar</th><th class="sag">Ceza</th><th></th></tr></thead><tbody>';
   p.items.slice().sort(function(a,b){return String(b.tarih).localeCompare(String(a.tarih));}).forEach(function(x){
-    h+='<tr><td>'+(x.tarih?uzunTarih(x.tarih):'-')+'</td><td>'+esc(x.kaynakAd||'')+'</td><td>'+esc(x.sube||'')+'</td>'+
+    const dis=!!x._disiplin;
+    h+='<tr'+(dis?' style="background:#fffaf2"':'')+'><td>'+(x.tarih?uzunTarih(x.tarih):'-')+'</td>'+
+       '<td>'+(dis?'<span class="rozet amber">Disiplin</span>':esc(x.kaynakAd||''))+'</td><td>'+esc(x.sube||'')+'</td>'+
        '<td>'+esc(x.baslik||'')+'</td><td>'+(x.aciklama?esc(x.aciklama):'<span class="mini-not">-</span>')+'</td>'+
        '<td class="sag">'+((Number(x.zarar)||0)?'<span class="zarar-rozet">'+tl(x.zarar)+'</span>':'<span class="mini-not">-</span>')+'</td>'+
-       '<td class="sag"><span class="ceza-rozet">'+saat(x.ceza)+'</span></td></tr>';
+       '<td class="sag"><span class="ceza-rozet">'+saat(x.ceza)+'</span></td>'+
+       '<td class="sag">'+(dis?'<a href="javascript:void(0)" class="dc-sil" onclick="disiplinCezaSil(\''+esc(x._id)+'\')" title="Disiplin cezasini sil" style="color:var(--kirmizi);font-weight:700;text-decoration:none">&times;</a>':'')+'</td></tr>';
   });
   h+='</tbody></table>';
   return h;
