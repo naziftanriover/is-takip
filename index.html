@@ -1971,7 +1971,7 @@ async function bahisOdemeSil(auditId,bahisId,idx){
   }catch(err){console.error(err);h.textContent='Silinemedi.';}
 }
 // Audit'e YENI hatali bahis ekler (foto olmadan). audit.bets dizisine yazar.
-async function auditBahisYeni(auditId,ticketNo,aciklama,zarar,kisiler){
+async function auditBahisYeni(auditId,ticketNo,aciklama,zarar,kisiler,files){
   const h=$('aHata');h.style.color='';h.textContent='';
   const bahisId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('b'+Date.now()+Math.random().toString(16).slice(2));
   try{
@@ -1984,6 +1984,20 @@ async function auditBahisYeni(auditId,ticketNo,aciklama,zarar,kisiler){
     });
     const adlar=(kisiler||[]).map(function(k){return k.ad;}).join(', ');
     await logYaz('olusturma','Bahis',auditId,(ticketNo?('#'+ticketNo+' '):'')+(aciklama||'')+(adlar?(' ['+adlar+']'):''));
+    // AYNI ANDA secilen resim(ler)i bu bahise yukle (auditId+bahisId ile eslesir)
+    const liste=Array.isArray(files)?files:(files?Array.prototype.slice.call(files):[]);
+    if(liste.length){
+      let ok=0; h.style.color='';h.textContent='Foto yukleniyor... (0/'+liste.length+')';
+      for(let i=0;i<liste.length;i++){ const file=liste[i];
+        if(!file||!file.type||file.type.indexOf('image/')!==0) continue;
+        try{ const dataUrl=await resimKucult(file); if(dataUrl.length>1000000){ continue; }
+          await db.collection('photos').add({auditId:auditId,bahisId:bahisId,ticketNo:ticketNo||'',aciklama:aciklama||'',personel:'',ceza:0,
+            uploadedBy:durum.uid,uploadedByName:adim(),dataUrl:dataUrl,note:aciklama||'',createdAt:SUNUCU_ZAMAN()});
+          ok++; h.textContent='Foto yukleniyor... ('+ok+'/'+liste.length+')';
+        }catch(e){ console.error('bahis foto yuklenemedi',e); }
+      }
+      h.textContent='';
+    }
     await auditCiz();
   }catch(err){console.error(err);h.textContent='Bahis eklenemedi. Tekrar deneyin.';}
 }
@@ -2145,18 +2159,24 @@ function auditBahisBlogu(kutu,audit,fotolar){
   const not=document.createElement('input');not.type='text';not.className='foto-not';not.placeholder='Aciklama (or. 3500 odeyecegine 3000 odedi)';
   const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.placeholder='Zarar (fazla +, eksik -)';zar.title='Fazla odeme icin arti, eksik odeme (sirket lehine) icin eksi girin';zar.step='0.01';zar.style.flex='0 1 170px';
   yuk.appendChild(tik);yuk.appendChild(not);yuk.appendChild(zar);
+  // Resim: bahis eklenirken AYNI ANDA yuklenir (sonradan tekrar acmaya gerek yok)
+  const fotoSatir=document.createElement('div');fotoSatir.className='foto-yuk';fotoSatir.style.marginTop='6px';
+  const fotoLbl=document.createElement('span');fotoLbl.className='mini-not';fotoLbl.textContent='Resim (istege bagli, birden fazla secilebilir):';
+  const foto=document.createElement('input');foto.type='file';foto.accept='image/*';foto.multiple=true;foto.className='foto-not';foto.style.flex='1 1 200px';
+  fotoSatir.appendChild(fotoLbl);fotoSatir.appendChild(foto);
   const kbas=document.createElement('div');kbas.className='mini-not';kbas.style.margin='6px 0 2px';kbas.textContent='Suclu personel(ler) - her birine ayri ceza, zarar tik ile secilir:';
   const ked=kisilerEditor(null);
   const arac=document.createElement('div');arac.className='satir-arac';arac.style.marginTop='8px';
   const kaydet=document.createElement('button');kaydet.type='button';kaydet.textContent='Kaydet';
   const iptal=document.createElement('button');iptal.type='button';iptal.className='ikincil';iptal.textContent='Iptal';
   arac.appendChild(kaydet);arac.appendChild(iptal);
-  form.appendChild(yuk);form.appendChild(kbas);form.appendChild(ked);form.appendChild(arac);
+  form.appendChild(yuk);form.appendChild(fotoSatir);form.appendChild(kbas);form.appendChild(ked);form.appendChild(arac);
   acBtn.onclick=()=>{form.style.display='';acBtn.style.display='none';$('aHata').textContent='';tik.focus();};
-  iptal.onclick=()=>{form.style.display='none';acBtn.style.display='';$('aHata').textContent='';};
+  iptal.onclick=()=>{form.style.display='none';acBtn.style.display='';$('aHata').textContent='';foto.value='';};
   kaydet.onclick=()=>{const t=tik.value.trim(),a=not.value.trim(),z=parseFloat(zar.value)||0,ks=ked._al();
     if(!t&&!a){$('aHata').textContent='Ticket no veya aciklama girin.';return;}
-    tik.value='';not.value='';zar.value='';auditBahisYeni(audit.id,t,a,z,ks);};
+    const fArr=Array.prototype.slice.call(foto.files||[]);   // dosyalari referanstan kopyala (reset once)
+    tik.value='';not.value='';zar.value='';foto.value='';auditBahisYeni(audit.id,t,a,z,ks,fArr);};
   yeni.appendChild(acBtn);yeni.appendChild(form);kutu.appendChild(yeni);
 }
 // Audit inline duzenleme formu (sube, tarih araligi, ticket araligi, denetleyenler)
