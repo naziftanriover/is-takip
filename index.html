@@ -2159,11 +2159,30 @@ function auditBahisBlogu(kutu,audit,fotolar){
   const not=document.createElement('input');not.type='text';not.className='foto-not';not.placeholder='Aciklama (or. 3500 odeyecegine 3000 odedi)';
   const zar=document.createElement('input');zar.type='number';zar.className='foto-not';zar.placeholder='Zarar (fazla +, eksik -)';zar.title='Fazla odeme icin arti, eksik odeme (sirket lehine) icin eksi girin';zar.step='0.01';zar.style.flex='0 1 170px';
   yuk.appendChild(tik);yuk.appendChild(not);yuk.appendChild(zar);
-  // Resim: bahis eklenirken AYNI ANDA yuklenir (sonradan tekrar acmaya gerek yok)
-  const fotoSatir=document.createElement('div');fotoSatir.className='foto-yuk';fotoSatir.style.marginTop='6px';
-  const fotoLbl=document.createElement('span');fotoLbl.className='mini-not';fotoLbl.textContent='Resim (istege bagli, birden fazla secilebilir):';
-  const foto=document.createElement('input');foto.type='file';foto.accept='image/*';foto.multiple=true;foto.className='foto-not';foto.style.flex='1 1 200px';
-  fotoSatir.appendChild(fotoLbl);fotoSatir.appendChild(foto);
+  // Resim: bahis eklenirken AYNI ANDA yuklenir. "Fotograf cek" -> kamera; birden fazla cekilebilir (birikir).
+  const fotoList=[];
+  const fotoInput=document.createElement('input');fotoInput.type='file';fotoInput.accept='image/*';fotoInput.setAttribute('capture','environment');fotoInput.style.display='none';
+  const galeriInput=document.createElement('input');galeriInput.type='file';galeriInput.accept='image/*';galeriInput.multiple=true;galeriInput.style.display='none';
+  const fotoSatir=document.createElement('div');fotoSatir.className='foto-yuk';fotoSatir.style.marginTop='6px';fotoSatir.style.flexWrap='wrap';
+  const fotoLbl=document.createElement('span');fotoLbl.className='mini-not';fotoLbl.style.flex='1 1 100%';fotoLbl.textContent='Resim (istege bagli): kamerayla cek (birden fazla) veya galeriden ekle.';
+  const cekBtn=document.createElement('button');cekBtn.type='button';cekBtn.className='kucuk';cekBtn.innerHTML='&#128247; Fotograf cek';
+  const galBtn=document.createElement('button');galBtn.type='button';galBtn.className='ikincil kucuk';galBtn.textContent='Galeriden ekle';
+  const onizle=document.createElement('div');onizle.style.cssText='display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:6px';
+  function fotoOnizleCiz(){ onizle.innerHTML=''; fotoList.forEach(function(f,idx){
+      const w=document.createElement('div');w.style.cssText='position:relative';
+      const img=document.createElement('img');try{img.src=URL.createObjectURL(f);}catch(e){}
+      img.style.cssText='height:64px;width:64px;object-fit:cover;border:1px solid #cbd5e1;border-radius:6px;display:block';
+      const x=document.createElement('button');x.type='button';x.innerHTML='&times;';x.title='Kaldir';
+      x.style.cssText='position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-weight:700;line-height:1;cursor:pointer';
+      x.onclick=function(){ fotoList.splice(idx,1); fotoOnizleCiz(); };
+      w.appendChild(img);w.appendChild(x);onizle.appendChild(w); });
+    cekBtn.innerHTML=fotoList.length?('&#128247; Fotograf cek ('+fotoList.length+')'):'&#128247; Fotograf cek';
+  }
+  cekBtn.onclick=function(){ fotoInput.value=''; fotoInput.click(); };
+  galBtn.onclick=function(){ galeriInput.value=''; galeriInput.click(); };
+  fotoInput.onchange=function(){ Array.prototype.slice.call(fotoInput.files||[]).forEach(function(f){fotoList.push(f);}); fotoInput.value=''; fotoOnizleCiz(); };
+  galeriInput.onchange=function(){ Array.prototype.slice.call(galeriInput.files||[]).forEach(function(f){fotoList.push(f);}); galeriInput.value=''; fotoOnizleCiz(); };
+  fotoSatir.appendChild(fotoLbl);fotoSatir.appendChild(cekBtn);fotoSatir.appendChild(galBtn);fotoSatir.appendChild(fotoInput);fotoSatir.appendChild(galeriInput);fotoSatir.appendChild(onizle);
   const kbas=document.createElement('div');kbas.className='mini-not';kbas.style.margin='6px 0 2px';kbas.textContent='Suclu personel(ler) - her birine ayri ceza, zarar tik ile secilir:';
   const ked=kisilerEditor(null);
   const arac=document.createElement('div');arac.className='satir-arac';arac.style.marginTop='8px';
@@ -2172,11 +2191,11 @@ function auditBahisBlogu(kutu,audit,fotolar){
   arac.appendChild(kaydet);arac.appendChild(iptal);
   form.appendChild(yuk);form.appendChild(fotoSatir);form.appendChild(kbas);form.appendChild(ked);form.appendChild(arac);
   acBtn.onclick=()=>{form.style.display='';acBtn.style.display='none';$('aHata').textContent='';tik.focus();};
-  iptal.onclick=()=>{form.style.display='none';acBtn.style.display='';$('aHata').textContent='';foto.value='';};
+  iptal.onclick=()=>{form.style.display='none';acBtn.style.display='';$('aHata').textContent='';fotoList.length=0;fotoOnizleCiz();};
   kaydet.onclick=()=>{const t=tik.value.trim(),a=not.value.trim(),z=parseFloat(zar.value)||0,ks=ked._al();
     if(!t&&!a){$('aHata').textContent='Ticket no veya aciklama girin.';return;}
-    const fArr=Array.prototype.slice.call(foto.files||[]);   // dosyalari referanstan kopyala (reset once)
-    tik.value='';not.value='';zar.value='';foto.value='';auditBahisYeni(audit.id,t,a,z,ks,fArr);};
+    const fArr=fotoList.slice();   // birikmis fotograflari kopyala
+    tik.value='';not.value='';zar.value='';fotoList.length=0;fotoOnizleCiz();auditBahisYeni(audit.id,t,a,z,ks,fArr);};
   yeni.appendChild(acBtn);yeni.appendChild(form);kutu.appendChild(yeni);
 }
 // Audit inline duzenleme formu (sube, tarih araligi, ticket araligi, denetleyenler)
