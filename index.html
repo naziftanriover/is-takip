@@ -377,7 +377,10 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,.s
 .cez-govde.acik{display:block}
 .cez-govde .ozet-tablo{margin:0;font-size:13px}
 .cez-govde .ozet-tablo td{vertical-align:top}
-@media(max-width:640px){.cez-govde .ozet-tablo{font-size:12px}}
+.cez-arac{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 10px;padding:8px 10px;background:var(--renk-tint);border-radius:var(--yuvarlak)}
+.cez-islendi{background:var(--yesil)!important;color:#fff!important;border-color:var(--yesil)!important;margin-left:auto}
+.cez-durum{white-space:nowrap}
+@media(max-width:640px){.cez-govde .ozet-tablo{font-size:12px}.cez-islendi{margin-left:0}}
 /* Cash Difference: sol=gunluk giris, sag=aylik rapor (2 ayri cerceve) */
 .cf-duzen{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
 .cf-panel{border:1px solid var(--renk-cizgi);border-radius:var(--yuvarlak);background:#fff;padding:16px;box-shadow:var(--golge)}
@@ -1024,7 +1027,7 @@ async function logYaz(action,entity,entityId,aciklama){
 }
 
 // ================== YEDEKLEME ==================
-const YEDEK_KOLONLAR=['branches','users','shifts','dailyAudits','tasks','cashEvents','audits','photos','auditLog','personnel','cashDiff','disiplinCeza'];
+const YEDEK_KOLONLAR=['branches','users','shifts','dailyAudits','tasks','cashEvents','audits','photos','auditLog','personnel','cashDiff','disiplinCeza','cezaTeslim'];
 // Tum verileri JSON olarak indirir (bilgisayara kaydeder).
 async function yedekIndir(){
   const st=$('yedekDurum');const btn=$('yedekBtn');st.style.color='';st.textContent='Yedek hazirlaniyor...';btn.disabled=true;
@@ -2946,7 +2949,18 @@ async function karneCiz(){
   }catch(err){console.error(err);el.innerHTML='<p class="bos-satir">Karne yuklenemedi.</p>';}
 }
 // ================== CEZALAR (ceza yazilmis hatalar, isim isim, PDF) ==================
-let cezalarSonVeri=[];   // PDF fonksiyonlari bunu kullanir
+let cezalarSonVeri=[];   // PDF fonksiyonlari bunu kullanir (filtrelenmis)
+let cezaFiltre='yeni';   // 'yeni' = sadece islenmemis (yazdirilmamis); 'tumu' = hepsi
+let cezaTeslimMap={};     // key -> teslim (islenmis) durumu
+// Her ceza kalemine STABIL anahtar (ayni ceza tekrar tekrar ayni anahtari uretir)
+function cezaItemKey(x){
+  if(x&&x._disiplin) return 'x|'+(x._id||'');
+  if(x&&x.kaynak==='bahis') return 'b|'+(x.docId||'')+'|'+(x.bahisId||'')+'|'+(typeof x.kisiIndex==='number'?x.kisiIndex:-1);
+  if(x&&x.kaynak==='kamera') return 'k|'+(x.docId||'')+'|'+(typeof x.kisiIndex==='number'?x.kisiIndex:-1);
+  if(x&&x.kaynak==='denetim') return 'd|'+(x.docId||'')+'|'+(x.dkey||'');
+  return '';
+}
+function cezaKeySan(key){ return String(key||'').replace(/[\/#\[\]\.\s]/g,'_').slice(0,300); }
 // Disiplin/davranis cezalarini secili doneme gore ceker.
 async function disiplinGetir(scope){
   try{
@@ -2990,23 +3004,36 @@ async function cezalarCiz(){
   await personelleriYukle(); disiplinKur();
   const scope={tum:aktifTum,ay:aktifAy};
   try{
-    const sonuc=await Promise.all([ karneTopla(scope,{fotosuz:true}), disiplinGetir(scope) ]);
-    const liste=sonuc[0], disiplin=sonuc[1];
+    const sonuc=await Promise.all([ karneTopla(scope,{fotosuz:true}), disiplinGetir(scope), teslimHaritasiGetir() ]);
+    const liste=sonuc[0], disiplin=sonuc[1]; cezaTeslimMap=sonuc[2]||{};
     const map={};
     const al=function(ad){ if(!map[ad]) map[ad]={ad:ad,items:[]}; return map[ad]; };
     liste.forEach(function(p){ (p.hatalar||[]).forEach(function(x){ if((Number(x.ceza)||0)>0) al(p.ad).items.push(x); }); });
     disiplin.forEach(function(d){ if(!d.personel) return;
       al(d.personel).items.push({kaynak:'disiplin',kaynakAd:'Disiplin',tarih:d.date||'',sube:'',baslik:'Disiplin / davranis',aciklama:d.aciklama||'',zarar:0,ceza:Number(d.ceza)||0,_id:d.id,_disiplin:true}); });
-    const veri=Object.keys(map).map(function(ad){ const it=map[ad].items;
+    // her kaleme anahtar + teslim (islenmis) durumu ekle
+    Object.keys(map).forEach(function(ad){ map[ad].items.forEach(function(x){ x._key=cezaItemKey(x); x._teslim=(x._key&&cezaTeslimMap[x._key])||null; }); });
+    // FILTRE: 'yeni' ise sadece islenmemis kalemleri goster
+    let veri=Object.keys(map).map(function(ad){
+      let it=map[ad].items;
+      if(cezaFiltre==='yeni') it=it.filter(function(x){return !x._teslim;});
       return {ad:ad,items:it,toplamCeza:it.reduce(function(s,x){return s+(Number(x.ceza)||0);},0),toplamZarar:it.reduce(function(s,x){return s+(Number(x.zarar)||0);},0)};
     }).filter(function(p){return p.items.length>0;});
     veri.sort(function(a,b){return b.toplamCeza-a.toplamCeza||a.ad.localeCompare(b.ad,'tr');});
     cezalarSonVeri=veri;
     const donem=scope.tum?'Tum zamanlar':('Ay: '+aktifAy);
-    if(!veri.length){ el.innerHTML='<p class="mini-not">'+esc(donem)+'</p><p class="bos-satir">Bu donemde ceza kaydi yok.</p>'; return; }
+    // filtre cubugu + islendi butonu HER ZAMAN gorunsun
+    const yeniAktif=cezaFiltre==='yeni';
+    let bar='<div class="cez-arac">'+
+      '<span class="mini-not">Goster:</span>'+
+      '<button type="button" class="kucuk'+(yeniAktif?'':' ikincil')+'" onclick="cezaFiltreSet(\'yeni\')">Sadece yeni (yazdirilmamis)</button>'+
+      '<button type="button" class="kucuk'+(yeniAktif?' ikincil':'')+'" onclick="cezaFiltreSet(\'tumu\')">Tumu</button>';
+    if(yeniAktif) bar+='<button type="button" class="kucuk cez-islendi" onclick="cezalarIslendiYap()">&#10003; Yazdirilanlari ISLENDI isaretle</button>';
+    bar+='</div>';
+    if(!veri.length){ el.innerHTML=bar+'<p class="mini-not">'+esc(donem)+'</p><p class="bos-satir">'+(yeniAktif?'Yeni (yazdirilmamis) ceza yok. Hepsi islenmis.':'Bu donemde ceza kaydi yok.')+'</p>'; return; }
     const gToplam=veri.reduce(function(s,p){return s+p.toplamCeza;},0);
     const gZarar=veri.reduce(function(s,p){return s+p.toplamZarar;},0);
-    let h='<p class="mini-not">'+esc(donem)+' &middot; '+veri.length+' personel &middot; toplam <b>'+saat(gToplam)+'</b> ceza &middot; sirkete ugratilan zarar <b class="'+tutarSinif(gZarar)+'">'+tl(gZarar)+'</b></p>';
+    let h=bar+'<p class="mini-not">'+esc(donem)+' &middot; '+(yeniAktif?'YENI: ':'')+veri.length+' personel &middot; toplam <b>'+saat(gToplam)+'</b> ceza &middot; sirkete ugratilan zarar <b class="'+tutarSinif(gZarar)+'">'+tl(gZarar)+'</b></p>';
     h+='<div style="margin:6px 0 12px"><button type="button" class="pdf-btn" onclick="cezalarPdfTum()">&#128424; Tum liste PDF / Yazdir</button></div>';
     veri.forEach(function(p,i){
       h+='<div class="cez-kisi"><div class="cez-kisi-bas" onclick="cezKisiAc(this)"><span class="cez-ok">&#9660;</span>'+
@@ -3017,15 +3044,45 @@ async function cezalarCiz(){
     el.innerHTML=h;
   }catch(err){ console.error(err); el.innerHTML='<p class="bos-satir">Cezalar yuklenemedi.</p>'; }
 }
+// Teslim (islenmis) haritasi: key -> {at} . cezaTeslim koleksiyonundan.
+async function teslimHaritasiGetir(){
+  try{ const s=await db.collection('cezaTeslim').get(); const m={};
+    s.docs.forEach(function(d){ const o=d.data(); if(o&&o.key) m[o.key]=(o.teslimAt||true); }); return m;
+  }catch(e){ console.error('teslim haritasi yuklenemedi',e); return {}; }
+}
+function cezaFiltreSet(mode){ cezaFiltre=(mode==='tumu'?'tumu':'yeni'); cezalarCiz(); }
+// Ekranda GORUNEN (filtreli) yeni cezalari 'islendi' isaretle -> bir daha 'yeni'de cikmaz.
+async function cezalarIslendiYap(){
+  const anahtarlar=[]; (cezalarSonVeri||[]).forEach(function(p){ (p.items||[]).forEach(function(x){ if(x._key && !x._teslim) anahtarlar.push(x._key); }); });
+  if(!anahtarlar.length){ if(typeof alert==='function')alert('Isaretlenecek yeni ceza yok.'); return; }
+  if(typeof confirm==='function' && !confirm(anahtarlar.length+' ceza kalemi ISLENDI (teslim edildi) olarak isaretlenecek. Bir daha "yeni" listesinde cikmayacak. Onayliyor musunuz?')) return;
+  try{
+    for(var i=0;i<anahtarlar.length;i++){ const key=anahtarlar[i];
+      await db.collection('cezaTeslim').doc(cezaKeySan(key)).set({key:key,teslimAt:SUNUCU_ZAMAN(),teslimBy:(auth.currentUser?auth.currentUser.uid:null)});
+    }
+    await logYaz('guncelleme','Ceza','',anahtarlar.length+' ceza islendi (teslim) isaretlendi');
+    await cezalarCiz();
+  }catch(err){ console.error(err); if(typeof alert==='function')alert('Isaretlenemedi. Yetki veya kural sorunu olabilir.'); }
+}
+// Bir cezanin 'islendi' isaretini geri al (Tumu gorunumunde).
+async function cezaTeslimGeriAl(key){
+  if(!key) return;
+  try{ await db.collection('cezaTeslim').doc(cezaKeySan(key)).delete(); await logYaz('guncelleme','Ceza','','ceza islendi isareti geri alindi'); await cezalarCiz(); }
+  catch(err){ console.error(err); if(typeof alert==='function')alert('Geri alinamadi.'); }
+}
 function cezalarKisiTabloHTML(p){
-  let h='<table class="ozet-tablo"><thead><tr><th>Tarih</th><th>Kaynak</th><th>Sube</th><th>Ticket / Hata</th><th>Aciklama</th><th class="sag">Zarar</th><th class="sag">Ceza</th><th></th></tr></thead><tbody>';
+  let h='<table class="ozet-tablo cez-tablo"><thead><tr><th>Tarih</th><th>Kaynak</th><th>Sube</th><th>Ticket / Hata</th><th>Aciklama</th><th class="sag">Zarar</th><th class="sag">Ceza</th><th>Durum</th><th></th></tr></thead><tbody>';
   p.items.slice().sort(function(a,b){return String(b.tarih).localeCompare(String(a.tarih));}).forEach(function(x){
     const dis=!!x._disiplin;
+    const durum = x._teslim
+      ? '<span class="geri-rozet">&#10003; islendi</span> <a href="javascript:void(0)" class="cez-geri" onclick="cezaTeslimGeriAl(\''+esc(x._key||'')+'\')" title="Islendi isaretini geri al" style="color:var(--kirmizi);text-decoration:none;font-size:11px">geri al</a>'
+      : '<span class="rozet amber">yeni</span>';
     h+='<tr'+(dis?' style="background:#fffaf2"':'')+'><td>'+(x.tarih?uzunTarih(x.tarih):'-')+'</td>'+
        '<td>'+(dis?'<span class="rozet amber">Disiplin</span>':esc(x.kaynakAd||''))+'</td><td>'+esc(x.sube||'')+'</td>'+
        '<td>'+esc(x.baslik||'')+'</td><td>'+(x.aciklama?esc(x.aciklama):'<span class="mini-not">-</span>')+'</td>'+
        '<td class="sag">'+((Number(x.zarar)||0)?'<span class="zarar-rozet">'+tl(x.zarar)+'</span>':'<span class="mini-not">-</span>')+'</td>'+
        '<td class="sag"><span class="ceza-rozet">'+saat(x.ceza)+'</span></td>'+
+       '<td class="cez-durum">'+durum+'</td>'+
        '<td class="sag">'+(dis?'<a href="javascript:void(0)" class="dc-sil" onclick="disiplinCezaSil(\''+esc(x._id)+'\')" title="Disiplin cezasini sil" style="color:var(--kirmizi);font-weight:700;text-decoration:none">&times;</a>':'')+'</td></tr>';
   });
   h+='</tbody></table>';
