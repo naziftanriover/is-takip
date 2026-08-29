@@ -3186,7 +3186,11 @@ async function cezaYaz(kalem,val,btn){
     await cezaYazCekirdek(kalem,v);
     if(h){ h.style.color='var(--yesil)';h.textContent=(kalem.personel||kalem.sube)+' icin ceza kaydedildi: '+saat(v)+'.';
       setTimeout(function(){ if(h){h.style.color='';h.textContent='';} },3000); }
-  }catch(err){console.error(err); if(h)h.textContent='Kaydedilemedi. Tekrar deneyin.';}
+  }catch(err){console.error(err); if(h){ h.style.color='var(--kirmizi)';
+    var kod=(err&&(err.code||err.message))||'bilinmeyen';
+    h.textContent = (/permission|insufficient|denied/i.test(kod))
+      ? 'Yetki reddedildi (izniniz yok). Guvenlik kurallari guncel degil olabilir. Kod: '+kod
+      : 'Kaydedilemedi ('+kod+'). Baglantiyi kontrol edip tekrar deneyin.'; } }
   finally{ if(btn)btn.disabled=false; }
 }
 // Karne detayindaki bir hataya ceza yazar (hata-oge uzerindeki data-* alanlarindan).
