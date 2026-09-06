@@ -193,3 +193,30 @@ Gorev bes panelden (Betty Transaction Audit, Betty Profitability, Golden, Global
 Solibet Futbol) veriyi toplar, PDF uretir ve ayni veriyi bu koleksiyona yazar.
 Isin tam dokumantasyonu: `~/Documents/Claude/Projects/SUBE KONTROL/` klasoru
 (`README.md` ve `BETTY_TRANSACTION_AUDIT_SPEC.md`).
+
+### Kasa kapanisi bolumu (07 Eyl 2026'da eklendi)
+
+Sube Raporu sekmesine "Kasa kapanisi — Betty" tablosu eklendi. Veri, gunluk belgenin
+`kasa` alanindan gelir:
+
+```
+kasa = {
+  gun: "YYYY-MM-DD",
+  subeler: { ALSANCAK: { tutar, kayitlar:[{saat,personel,tutar}], gecmis:[{gun,tutar}] }, ... },
+  terminal: { ALSANCAK: [{saat,personel,terminal,tutar}], ... }   // personel farklari, henuz ekranda gosterilmiyor
+}
+```
+- `tutar` > 0 = kasa FAZLA, < 0 = kasa EKSIK, null = o gun kapanis kaydi yok
+- `gecmis` son 7 gunu tutar; ekranda mini cubuk grafik olarak cizilir (her sube kendi olcegi)
+- Kaynak: Betty islem kodu 88 (fazla) / 89 (eksik). Kapanis kaydi gece yarisinin iki
+  yanina dusebildigi icin saati 00:00-06:00 arasindaki kayit bir onceki gune yazilir.
+- Kod: `srKasaHtml()` fonksiyonu, `srHtml()` icinde ARA RAPOR'dan sonra cagriliyor.
+- CSS siniflari: `.sr-kasa-tab`, `.sr-spark`, `.sr-sp`
+
+### Sube Raporu'na ne yazilir?
+
+Bu koleksiyona SADECE her sabah 10:00'da calisan zamanlanmis gorevin urettigi
+genel gunluk rapor yazilir. Nazif'in ara ara istedigi tek seferlik incelemeler
+(ornegin "bugun sadece Itimat'a bak, kasasi fazla") programa YAZILMAZ; cevap
+sohbette kalir. Raporun uretim mantigi ve Betty teknik notlari burada degil,
+Mac'te `Documents/Claude/Projects/SUBE KONTROL` klasorunde tutuluyor.

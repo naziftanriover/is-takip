@@ -441,6 +441,17 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
 
 /* --- Sube Islem Raporu --- */
 .sr-sag{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+.sr-kasa-tab td,.sr-kasa-tab th{vertical-align:middle}
+.sr-spark{display:inline-flex;align-items:center;gap:3px;height:30px;padding:0 2px;
+  background:linear-gradient(to bottom,transparent 14px,rgba(0,0,0,.18) 14px,rgba(0,0,0,.18) 15px,transparent 15px)}
+.sr-sp{position:relative;display:inline-block;width:9px;height:30px}
+.sr-sp i{position:absolute;left:0;width:9px;border-radius:1px;display:block}
+.sr-sp i.up{bottom:15px;background:#1f9d55}
+.sr-sp i.dn{top:15px;background:#c5372c}
+.sr-sp i.zr{top:14px;height:2px;background:#b9c2c9}
+.sr-kasa-not{font-size:11px;color:#6b7680;margin:6px 2px 0;line-height:1.5}
+.sr-kasa-buyuk{font-weight:700}
 .sr-toplam td{background:var(--renk-tint);font-weight:700}
 .sr-alt td{color:var(--renk-soluk);font-size:12px;background:#fafcfb}
 .sr-alt td i{font-style:normal;color:#94a3b8;font-size:11px;margin-left:6px}
@@ -3726,6 +3737,53 @@ async function srGoster(gun){
   el.innerHTML=srHtml(d);
 }
 
+function srKasaHtml(k){
+  if(!k||!k.subeler) return '';
+  var subeler=k.subeler;
+  function spark(g){
+    g=g||[]; var maks=0;
+    g.forEach(function(x){ if(x.tutar!=null&&Math.abs(x.tutar)>maks) maks=Math.abs(x.tutar); });
+    if(!maks) maks=1;
+    return '<span class="sr-spark">'+g.map(function(x){
+      if(x.tutar==null) return '<span class="sr-sp" title="'+srEsc(x.gun)+' &mdash; kayit yok"><i class="zr"></i></span>';
+      var hh=Math.max(2,Math.round(Math.abs(x.tutar)/maks*14));
+      return '<span class="sr-sp" title="'+srEsc(x.gun)+' &mdash; '+srTl(x.tutar)+'"><i class="'+
+        (x.tutar>=0?'up':'dn')+'" style="height:'+hh+'px"></i></span>';
+    }).join('')+'</span>';
+  }
+  var toplam=0, varMi=false;
+  var h='<div class="rapor-bolum"><p class="rapor-bolum-bas">Kasa kapanisi &mdash; Betty</p>';
+  h+='<table class="ozet-tablo sr-kasa-tab"><thead><tr><th>Sube</th><th class="sr-sag">Kasa farki</th>'+
+     '<th>Durum</th><th>Kapatan</th><th>Saat</th><th>Son 7 gun</th></tr></thead><tbody>';
+  SR_SUBE.forEach(function(sb){
+    var o=subeler[sb]||{}; var t=o.tutar;
+    var kay=(o.kayitlar||[]);
+    var kim=kay.map(function(r){return r.personel;}).join(', ');
+    var st=kay.map(function(r){return r.saat;}).join(', ');
+    if(t==null){
+      h+='<tr><td><b>'+sb+'</b></td><td class="sr-sag">&mdash;</td><td>kapanis kaydi yok</td>'+
+         '<td>&mdash;</td><td>&mdash;</td><td>'+spark(o.gecmis)+'</td></tr>';
+      return;
+    }
+    varMi=true; toplam+=t;
+    var buyuk=Math.abs(t)>=5000;
+    h+='<tr><td><b>'+sb+'</b></td>'+
+       '<td class="sr-sag '+(t>=0?'rapor-dogru':'rapor-yanlis')+(buyuk?' sr-kasa-buyuk':'')+'">'+srTl(t)+'</td>'+
+       '<td class="'+(t>=0?'rapor-dogru':'rapor-yanlis')+'">'+(t>=0?'FAZLA':'EKSIK')+'</td>'+
+       '<td>'+srEsc(kim||'-')+'</td><td>'+srEsc(st||'-')+'</td><td>'+spark(o.gecmis)+'</td></tr>';
+  });
+  if(varMi){
+    h+='<tr class="sr-toplam"><td><b>TOPLAM</b></td><td class="sr-sag '+(toplam>=0?'rapor-dogru':'rapor-yanlis')+
+       '"><b>'+srTl(toplam)+'</b></td><td colspan="4"></td></tr>';
+  }
+  h+='</tbody></table>';
+  h+='<p class="sr-kasa-not">Kaynak: Betty islem kodu 88 (sube kasasi fazla) / 89 (sube kasasi eksik). '+
+     'Kapanis kaydi gece yarisinin iki yanina dusebildigi icin saati 00:00&ndash;06:00 arasinda olan kayit '+
+     'bir onceki gunun kapanisi sayilir. Yesil = fazla, kirmizi = eksik; cubuklarda orta cizgi sifir ve her sube kendi 7 gunluk en buyuk farkina gore olceklenir.</p>';
+  h+='</div>';
+  return h;
+}
+
 function srHtml(d){
   var ara=d.ara||{}, den=d.denetim||{}, kan=d.kanal||{};
   var subeler=den.subeler||[];
@@ -3789,6 +3847,8 @@ function srHtml(d){
     }
     h+='</div>';
   }
+
+  h+=srKasaHtml(d.kasa);
 
   // ---- SUBE SUBE DENETIM ----
   subeler.forEach(function(s){
