@@ -202,8 +202,11 @@ Sube Raporu sekmesine "Kasa kapanisi — Betty" tablosu eklendi. Veri, gunluk be
 ```
 kasa = {
   gun: "YYYY-MM-DD",
-  subeler: { ALSANCAK: { tutar, kayitlar:[{saat,personel,tutar}], gecmis:[{gun,tutar}] }, ... },
-  terminal: { ALSANCAK: [{saat,personel,terminal,tutar}], ... }   // personel farklari, henuz ekranda gosterilmiyor
+  subeler: { ALSANCAK: { tutar, kayitlar:[{saat,personel,tutar,takvim}], gecmis:[{gun,tutar}],
+                         takvimGun, birlesik, gecikmeDk, gecKapanis,
+                         duzeltme:{dunGun,dun,bugun,net}|null }, ... },
+  terminal: { ALSANCAK: [{saat,personel,terminal,tutar}], ... },  // personel farklari, henuz ekranda gosterilmiyor
+  ek: { ALSANCAK: {unpaids, nakit, guvenilir, neden}, ... }       // Cash-up ekranindan
 }
 ```
 - `tutar` > 0 = kasa FAZLA, < 0 = kasa EKSIK, null = o gun kapanis kaydi yok
@@ -220,3 +223,29 @@ genel gunluk rapor yazilir. Nazif'in ara ara istedigi tek seferlik incelemeler
 (ornegin "bugun sadece Itimat'a bak, kasasi fazla") programa YAZILMAZ; cevap
 sohbette kalir. Raporun uretim mantigi ve Betty teknik notlari burada degil,
 Mac'te `Documents/Claude/Projects/SUBE KONTROL` klasorunde tutuluyor.
+
+
+### Rapor dili — Betty terimleri
+
+Raporda uydurma Turkce yon etiketi (IN/OUT/FAZLA/EKSIK) kullanilmaz; Betty'nin kendi
+ekranindaki adlar yazilir. Cevrim tablosu `SR_BETTY_AD` icinde:
+Cash Transfer To/From Shop, Stake Adjustment Up/Down, Payout Adjustment Up/Down,
+Cash Transfer To/From Manager, Cash Shop Discrepancy Up/Down, Cash Term Discrepancy Up/Down.
+Yeni kayitlar ham `tip` alanini tasir; eski belgelerde `tip` yoksa `SR_ESKI_AD` ile
+`yon` kodundan cevrilir.
+
+### Unpaids ve Cash in shop
+
+`kasa.ek` alanindan gelir, kaynagi Cash-up ekrani. `guvenilir:false` ise ayni takvim
+gunune iki kapanis dustugu icin Cash-up ikisini toplamistir; o hucre yildizla (*)
+isaretlenir ve tek gune ait degildir.
+
+
+### Kasa tablosundaki rozetler
+
+- **GEC KAPANIS** (kirmizi): sube kapanisi (Shop Cash Close Down) o gunun son terminal
+  kapanisindan 1 saatten fazla sonra basilmis. Sabahki Shop Sub Total acilisi fark
+  uretmedigi icin, gunduz saatinde gorunen bir kapanis o gece yapilmamis demektir.
+- **ONCEKI GUNUN DUZELTMESI** (mavi): bugunku fark, dunku farki ters yonde ve tutarca
+  karsiliyor (net, buyuk olanin %5'inden kucuk). Yeni bir olay degil, dunku hatanin
+  duzeltilmesi.
