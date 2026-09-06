@@ -3686,8 +3686,26 @@ async function subeRaporCiz(){
   el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
   try{
     if(!srListe){
-      var snap=await db.collection('subeRaporu').orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(90).get();
-      srListe=snap.docs.map(function(d){ srCache[d.id]=d.data(); return d.id; });
+      // Gun listesi kucuk bir dizin belgesinden okunur; boylece butun gunlerin
+      // verisi indirilmez, sadece secilen gunun belgesi cekilir.
+      srListe=[];
+      try{
+        var ix=await db.collection('subeRaporu').doc('gunler').get();
+        if(ix.exists && Array.isArray((ix.data()||{}).liste)) srListe=ix.data().liste.slice();
+      }catch(e){}
+      if(!srListe.length){
+        // Dizin yoksa: son 30 gunun belgesi var mi diye tarih tarih bakilir.
+        var bugun=new Date(), denemeler=[];
+        for(var i=1;i<=30;i++){
+          var t=new Date(bugun.getTime()-i*86400000);
+          denemeler.push(t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'));
+        }
+        var sonuc=await Promise.all(denemeler.map(function(g){
+          return db.collection('subeRaporu').doc(g).get().then(function(d){ return d.exists?g:null; }).catch(function(){return null;});
+        }));
+        srListe=sonuc.filter(Boolean);
+      }
+      srListe.sort(function(a,b){ return a<b?1:(a>b?-1:0); });   // yeniden eskiye
       sel.innerHTML=srListe.length? srListe.map(function(g){return '<option value="'+g+'">'+g+'</option>';}).join('')
         : '<option value="">-</option>';
       sel.onchange=function(){ srGoster(sel.value); };
