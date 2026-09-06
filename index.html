@@ -438,6 +438,26 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
 /* Kart basliklarina teal kimlik noktasi */
 .pano-kart>h3:first-child{display:flex;align-items:center;gap:8px}
 .pano-kart>h3:first-child::before{content:"";width:6px;height:6px;border-radius:2px;background:var(--renk-ana);flex:0 0 auto}
+
+/* --- Sube Islem Raporu --- */
+.sr-sag{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sr-toplam td{background:var(--renk-tint);font-weight:700}
+.sr-alt td{color:var(--renk-soluk);font-size:12px;background:#fafcfb}
+.sr-alt td i{font-style:normal;color:#94a3b8;font-size:11px;margin-left:6px}
+.sr-kk{font-size:12px;line-height:1.35;white-space:nowrap}
+.sr-kk b{display:block}.sr-kk span{display:block;color:var(--renk-soluk)}
+.sr-kk i{display:block;font-style:normal;color:#94a3b8;font-size:11px}
+.sr-yon{display:inline-block;min-width:44px;text-align:center;padding:1px 6px;border-radius:4px;
+ font-size:11px;font-weight:700;border:1px solid}
+.sr-yesil{background:#e8f5ee;color:#166534;border-color:#bbe3cb}
+.sr-kirmizi{background:#fdeeee;color:#991b1b;border-color:#f2c9c9}
+.sr-ik{text-align:center;font-weight:700;width:26px}
+tr.sr-ok .sr-ik{color:var(--yesil)}
+tr.sr-yok .sr-ik{color:var(--kirmizi)} tr.sr-yok td{background:#fdf2f2}
+tr.sr-fark .sr-ik,tr.sr-gec .sr-ik{color:var(--amber)}
+tr.sr-fark td,tr.sr-gec td{background:#fdf9ef}
+#sekme-subeRapor .ozet-tablo{font-size:13px;margin-bottom:10px}
+#sekme-subeRapor .ozet-tablo th{font-size:11px}
 </style>
 </head>
 <body>
@@ -481,6 +501,7 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
     <button class="sekme-btn" data-hedef="sekme-cashfark" type="button">Cash Difference</button>
     <button class="sekme-btn" data-hedef="sekme-rota" type="button">Rota</button>
     <button class="sekme-btn" data-hedef="sekme-rapor" type="button">Aylik Rapor</button>
+    <button class="sekme-btn" data-hedef="sekme-subeRapor" type="button">Sube Raporu</button>
     <button class="sekme-btn" data-hedef="sekme-karne" type="button">Personel Karnesi</button>
     <button class="sekme-btn" data-hedef="sekme-cezalar" type="button">Cezalar</button>
     <button class="sekme-btn ceza-btn" data-hedef="sekme-ceza" type="button">Ceza</button>
@@ -673,6 +694,15 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
         </div>
       </div>
       <div id="raporIcerik"><p class="bos-satir">Yukleniyor...</p></div>
+    </section>
+    <section id="sekme-subeRapor" class="sekme-bolum gizli">
+      <h2>Sube Islem Raporu</h2>
+      <div class="kart-form">
+        <div class="form-satir">
+          <div class="alan"><label>Rapor gunu</label><select id="srTarih"></select></div>
+        </div>
+      </div>
+      <div id="srIcerik"><p class="bos-satir">Yukleniyor...</p></div>
     </section>
 
     <!-- PERSONEL KARNESI -->
@@ -1125,6 +1155,7 @@ const SEKME_IKON={
   'sekme-ceza':'<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',
   'sekme-cezalar':'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>',
   'sekme-log':'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+  'sekme-subeRapor':'<path d="M3 3v18h18"/><path d="M7 15l3-4 3 3 5-7"/>',
   'sekme-subeler':'<path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/>',
   'sekme-yedek':'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>'
 };
@@ -1157,6 +1188,7 @@ function sekmeleriKur(){
     if(b.dataset.hedef==='sekme-audit') auditCiz();
     if(b.dataset.hedef==='sekme-rota') rotaYukle();
     if(b.dataset.hedef==='sekme-rapor') raporCiz();
+    if(b.dataset.hedef==='sekme-subeRapor') subeRaporCiz();
     if(b.dataset.hedef==='sekme-karne') karneCiz();
     if(b.dataset.hedef==='sekme-cezalar') cezalarCiz();
     if(b.dataset.hedef==='sekme-ceza') cezaCiz();
@@ -3631,6 +3663,211 @@ auth.onAuthStateChanged(async(u)=>{
     $('genelHata').textContent='Bir sorun olustu. Sayfayi yenileyin.';
   }
 });
+
+// ================== SUBE ISLEM RAPORU (otomatik gunluk rapor) ==================
+// Veri kaynagi: Firestore koleksiyonu "subeRaporu", belge kimligi = YYYY-MM-DD
+// Her sabah otomatik yazilir; burada sadece OKUNUR.
+var srListe=null, srCache={};
+function srTl(n){ n=Number(n)||0; var neg=n<0; n=Math.abs(n);
+  var p=n.toFixed(2).split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  return (neg?'-':'')+p[0]+','+p[1]; }
+function srAdet(n){ return String(Number(n)||0).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
+function srEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+var SR_SUBE=['ALSANCAK','ITIMAT','KASGAR','ZEYTINLIK'];
+var SR_ONCELIK={yuksek:['YUKSEK','kirmizi'],orta:['ORTA','amber'],dusuk:['BILGI','gri']};
+function srRozet(sev){ var o=SR_ONCELIK[sev]||SR_ONCELIK.dusuk;
+  return '<span class="rozet '+o[1]+'">'+o[0]+'</span>'; }
+function srYon(y){ var k=(y==='OUT'||y==='DOWN')?'kirmizi':'yesil';
+  return '<span class="sr-yon sr-'+k+'">'+srEsc(y)+'</span>'; }
+
+async function subeRaporCiz(){
+  var el=$('srIcerik'), sel=$('srTarih');
+  el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
+  try{
+    if(!srListe){
+      var snap=await db.collection('subeRaporu').orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(90).get();
+      srListe=snap.docs.map(function(d){ srCache[d.id]=d.data(); return d.id; });
+      sel.innerHTML=srListe.length? srListe.map(function(g){return '<option value="'+g+'">'+g+'</option>';}).join('')
+        : '<option value="">-</option>';
+      sel.onchange=function(){ srGoster(sel.value); };
+    }
+    if(!srListe.length){ el.innerHTML='<p class="bos-satir">Henuz rapor yok. Ilk rapor yarin sabah dusecek.</p>'; return; }
+    srGoster(sel.value||srListe[0]);
+  }catch(e){ el.innerHTML='<p class="bos-satir">Rapor okunamadi: '+srEsc(e.message)+'</p>'; }
+}
+
+async function srGoster(gun){
+  var el=$('srIcerik');
+  if(!gun){ el.innerHTML='<p class="bos-satir">Gun secilmedi.</p>'; return; }
+  el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
+  var d=srCache[gun];
+  if(!d){ var s=await db.collection('subeRaporu').doc(gun).get();
+    if(!s.exists){ el.innerHTML='<p class="bos-satir">Bu gune ait rapor yok.</p>'; return; }
+    d=srCache[gun]=s.data(); }
+  el.innerHTML=srHtml(d);
+}
+
+function srHtml(d){
+  var ara=d.ara||{}, den=d.denetim||{}, kan=d.kanal||{};
+  var subeler=den.subeler||[];
+  var tum=[]; subeler.forEach(function(s){ tum=tum.concat(s.inout||[],s.stake||[],s.po||[]); });
+  var ny=tum.filter(function(b){return b.sev==='yuksek';}).length;
+  var no=tum.filter(function(b){return b.sev==='orta';}).length;
+  var eksik=0; subeler.forEach(function(s){ eksik+=((s.managerOzet||{}).sorunlu)||0; });
+  var uyus=0; Object.keys(kan.subeler||{}).forEach(function(k){ uyus+=((kan.subeler[k].uyusmaz)||[]).length; });
+
+  var h='<div class="rapor-ay-ozet"><p class="ozet-baslik">'+srEsc(d.tarih||'')+
+    (d.gun?' &middot; '+srEsc(d.gun):'')+'</p><div class="ozet-satir">'+
+    '<span><b>'+ny+'</b> yuksek oncelikli bulgu</span>'+
+    '<span><b>'+no+'</b> orta oncelikli bulgu</span>'+
+    '<span><b>'+eksik+'</b> karsiliksiz kasa kaydi</span>'+
+    '<span><b>'+((den.seriler||[]).length)+'</b> pes pese duzeltme serisi</span>'+
+    '<span><b>'+uyus+'</b> kanal yazim uyusmazligi</span></div></div>';
+
+  // ---- ARA RAPOR ----
+  if(ara.kaynaklar){
+    var toplam={stake:0,po:0,ticket:0};
+    h+='<div class="rapor-bolum"><p class="rapor-bolum-bas">Dun ne oldu (ara rapor)</p>';
+    h+='<table class="ozet-tablo"><thead><tr><th>Sube</th><th class="sr-sag">Stake</th>'+
+       '<th class="sr-sag">Payout</th><th class="sr-sag">Kar / Zarar</th><th class="sr-sag">Bilet</th></tr></thead><tbody>';
+    SR_SUBE.forEach(function(sb){
+      var k=ara.kaynaklar[sb]||{}, f=(ara.futbol||{})[sb]||{stake:0,po:0,ticket:0};
+      var st=0,po=0,tk=0;
+      Object.keys(k).forEach(function(q){ st+=k[q].stake||0; po+=k[q].po||0; tk+=k[q].ticket||0; });
+      st+=f.stake||0; po+=f.po||0; tk+=f.ticket||0;
+      toplam.stake+=st; toplam.po+=po; toplam.ticket+=tk;
+      var kz=st-po;
+      h+='<tr><td><b>'+sb+'</b></td><td class="sr-sag">'+srTl(st)+'</td><td class="sr-sag">'+srTl(po)+
+         '</td><td class="sr-sag '+(kz>=0?'rapor-dogru':'rapor-yanlis')+'"><b>'+srTl(kz)+'</b></td>'+
+         '<td class="sr-sag">'+srAdet(tk)+'</td></tr>';
+    });
+    var tkz=toplam.stake-toplam.po;
+    h+='<tr class="sr-toplam"><td><b>SIRKET TOPLAMI</b></td><td class="sr-sag"><b>'+srTl(toplam.stake)+
+       '</b></td><td class="sr-sag"><b>'+srTl(toplam.po)+'</b></td><td class="sr-sag '+
+       (tkz>=0?'rapor-dogru':'rapor-yanlis')+'"><b>'+srTl(tkz)+'</b></td><td class="sr-sag"><b>'+
+       srAdet(toplam.ticket)+'</b></td></tr></tbody></table>';
+
+    h+='<p class="rapor-sube-ist">Kaynak kirilimi (Betty / Golden / Global / Kiron) &mdash; stake &middot; payout &middot; bilet</p>';
+    h+='<table class="ozet-tablo"><thead><tr><th>Sube</th><th>Betty</th><th>Golden</th><th>Global</th><th>Kiron</th></tr></thead><tbody>';
+    SR_SUBE.forEach(function(sb){
+      var k=ara.kaynaklar[sb]||{};
+      h+='<tr><td><b>'+sb+'</b></td>'+['Betty','Golden','Global','Kiron'].map(function(q){
+        var v=k[q]||{stake:0,po:0,ticket:0};
+        return '<td class="sr-kk"><b>'+srTl(v.stake)+'</b><span>'+srTl(v.po)+'</span><i>'+srAdet(v.ticket)+' bilet</i></td>';
+      }).join('')+'</tr>';
+    });
+    h+='</tbody></table>';
+
+    if(ara.futbol){
+      h+='<p class="rapor-sube-ist">Solibet Futbol</p><table class="ozet-tablo"><thead><tr><th>Sube</th>'+
+         '<th class="sr-sag">Stake</th><th class="sr-sag">Payout</th><th class="sr-sag">Bilet</th>'+
+         '<th class="sr-sag">Kar / Zarar</th></tr></thead><tbody>';
+      SR_SUBE.forEach(function(sb){ var f=ara.futbol[sb]||{stake:0,po:0,ticket:0}; var kz=(f.stake||0)-(f.po||0);
+        h+='<tr><td><b>'+sb+'</b></td><td class="sr-sag">'+srTl(f.stake)+'</td><td class="sr-sag">'+srTl(f.po)+
+           '</td><td class="sr-sag">'+srAdet(f.ticket)+'</td><td class="sr-sag '+(kz>=0?'rapor-dogru':'rapor-yanlis')+
+           '">'+srTl(kz)+'</td></tr>'; });
+      h+='</tbody></table>';
+    }
+    h+='</div>';
+  }
+
+  // ---- SUBE SUBE DENETIM ----
+  subeler.forEach(function(s){
+    var kn=(kan.subeler||{})[s.sube]||{};
+    var o=s.ozet||{}, mo=s.managerOzet||{};
+    h+='<div class="rapor-bolum"><p class="rapor-bolum-bas">'+srEsc(s.sube)+'</p>';
+    h+='<p class="rapor-sube-ist">Shop IN '+srTl(o.inTutar)+' ('+srAdet(o.inAdet)+' islem) &middot; '+
+       'Shop OUT '+srTl(o.outTutar)+' ('+srAdet(o.outAdet)+' islem) &middot; Net '+srTl((o.inTutar||0)-(o.outTutar||0))+
+       (mo.sorunlu?' &middot; <b class="rapor-yanlis">'+mo.sorunlu+' karsiliksiz kasa kaydi</b>':' &middot; kasa kayitlari tam')+'</p>';
+
+    // kanal
+    if(kn.kanal){
+      h+='<table class="ozet-tablo"><thead><tr><th>Kanal / aciklamaya yazilan</th><th class="sr-sag">Adet</th>'+
+         '<th class="sr-sag">Yatirim</th><th class="sr-sag">Adet</th><th class="sr-sag">PO</th></tr></thead><tbody>';
+      [['ONLINE','ONLINE (6 haneli hesap)'],['365','365 (8-10 haneli hesap)'],['DIGER','Diger / kanal disi']].forEach(function(p){
+        var v=kn.kanal[p[0]]||{};
+        h+='<tr><td><b>'+p[1]+'</b></td><td class="sr-sag">'+srAdet(v.adetIn)+'</td><td class="sr-sag">'+srTl(v.tutarIn)+
+           '</td><td class="sr-sag">'+srAdet(v.adetOut)+'</td><td class="sr-sag">'+srTl(v.tutarOut)+'</td></tr>';
+        if(p[0]==='DIGER'&&(kn.diger||[]).length){
+          kn.diger.forEach(function(a){
+            h+='<tr class="sr-alt"><td>&nbsp;&nbsp;'+srEsc(a.aciklama)+' <i>'+srEsc(a.personel||'')+'</i></td>'+
+               '<td class="sr-sag">'+(a.adetIn||'')+'</td><td class="sr-sag">'+(a.adetIn?srTl(a.tutarIn):'')+
+               '</td><td class="sr-sag">'+(a.adetOut||'')+'</td><td class="sr-sag">'+(a.adetOut?srTl(a.tutarOut):'')+'</td></tr>';
+          });
+        }
+      });
+      h+='</tbody></table>';
+    }
+    if((kn.uyusmaz||[]).length){
+      h+='<p class="rapor-sube-ist">Yazim uyusmazligi &mdash; hesap numarasi ile yazilan etiket farkli ('+kn.uyusmaz.length+')</p>';
+      h+='<table class="ozet-tablo"><thead><tr><th>Saat</th><th>Yon</th><th class="sr-sag">Tutar</th><th>Personel</th>'+
+         '<th>Hesap</th><th>Numaraya gore</th><th>Aciklama</th></tr></thead><tbody>';
+      kn.uyusmaz.forEach(function(u){
+        h+='<tr><td>'+srEsc(u.saat)+'</td><td>'+srYon(u.yon)+'</td><td class="sr-sag">'+srTl(u.tutar)+'</td><td>'+
+           srEsc(u.personel)+'</td><td>'+srEsc(u.hesap)+'</td><td><b>'+srEsc(u.numaraya)+'</b></td><td>'+srEsc(u.aciklama)+'</td></tr>';
+      });
+      h+='</tbody></table>';
+    }
+
+    h+=srBulguTablo('Kasa giris / cikis &mdash; isaretlenen hareketler', s.inout, true);
+    h+=srBulguTablo('Stake adjustment (5 TL ustu)', s.stake, true);
+    h+=srBulguTablo('Payout adjustment', s.po, true);
+
+    // personel arasi kasa
+    if((s.manager||[]).length){
+      h+='<p class="rapor-sube-ist">Personel arasi kasa &mdash; kayit disiplini ('+s.manager.length+' hareket)</p>';
+      h+='<table class="ozet-tablo"><thead><tr><th></th><th>Saat</th><th>Yon</th><th class="sr-sag">Tutar</th>'+
+         '<th>Personel</th><th>Karsi taraf (yazilan)</th><th>Kayit durumu</th></tr></thead><tbody>';
+      s.manager.forEach(function(m){
+        var ik,cls,dur;
+        if(m.durum==='eslesti'){ var g=m.gap||0;
+          if(g>=30){ ik='!'; cls='sr-gec'; dur='kayit '+g+' dk gecikmeli kapandi &middot; '+srEsc(m.es||''); }
+          else { ik='&#10003;'; cls='sr-ok'; dur='karsiligi var &middot; '+srEsc(m.es||''); } }
+        else if(m.durum==='fark'){ ik='&#8800;'; cls='sr-fark';
+          dur='tutar tutmuyor &middot; '+srEsc(m.es||'')+' &middot; fark '+srTl(Math.abs(m.fark||0))+' TL'; }
+        else { ik='&#10007;'; cls='sr-yok'; dur='<b>karsi tarafta kayit YOK</b>'; }
+        h+='<tr class="'+cls+'"><td class="sr-ik">'+ik+'</td><td>'+srEsc(m.saat)+'</td><td>'+srYon(m.yon)+
+           '</td><td class="sr-sag">'+srTl(m.tutar)+'</td><td>'+srEsc(m.personel)+'</td><td>'+srEsc(m.aciklama)+
+           '</td><td>'+dur+'</td></tr>';
+      });
+      h+='</tbody></table>';
+    }
+
+    // seriler
+    (den.seriler||[]).filter(function(x){return x.sube===s.sube;}).forEach(function(sr){
+      h+='<p class="rapor-sube-ist">Pes pese duzeltme serisi &mdash; <b>'+srEsc(sr.personel)+'</b> &middot; '+
+         srEsc(sr.baslangic)+'-'+srEsc(sr.bitis)+' arasi '+sr.adet+' kayit, toplam '+srTl(sr.toplam)+' TL</p>';
+      h+='<table class="ozet-tablo"><thead><tr><th>Saat</th><th>Yon</th><th>Ticket</th><th class="sr-sag">Tutar</th><th>Aciklama</th></tr></thead><tbody>';
+      (sr.islemler||[]).forEach(function(i){
+        h+='<tr><td>'+srEsc(i.saat)+'</td><td>'+srYon(i.yon)+'</td><td>'+srEsc(i.ticket)+'</td><td class="sr-sag">'+
+           srTl(i.tutar)+'</td><td>'+srEsc(i.aciklama)+'</td></tr>'; });
+      h+='</tbody></table>';
+    });
+    h+='</div>';
+  });
+
+  if((den.kurus||[]).length){
+    h+='<div class="rapor-bolum"><p class="rapor-bolum-bas">Kurus duzeltmeleri (5 TL alti &mdash; rapora alinmadi)</p><p class="rapor-sube-ist">'+
+       den.kurus.map(function(k){ return srEsc(k.sube)+' '+srEsc(k.personel)+' <b>'+k.adet+'</b>'; }).join(' &middot; ')+'</p></div>';
+  }
+  return h;
+}
+
+function srBulguTablo(baslik, rows, ticket){
+  if(!rows||!rows.length) return '';
+  var h='<p class="rapor-sube-ist">'+baslik+' ('+rows.length+')</p>';
+  h+='<table class="ozet-tablo"><thead><tr><th>Oncelik</th><th>Saat</th><th>Yon</th>'+
+     (ticket?'<th>Ticket</th>':'')+'<th class="sr-sag">Tutar</th><th>Personel</th><th>Aciklama</th><th>Degerlendirme</th></tr></thead><tbody>';
+  rows.forEach(function(b){
+    var ac=b.aciklama?srEsc(b.aciklama):'<i class="rapor-yanlis">bos birakilmis</i>';
+    h+='<tr><td>'+srRozet(b.sev)+'</td><td>'+srEsc(b.saat)+'</td><td>'+srYon(b.yon)+'</td>'+
+       (ticket?'<td>'+srEsc(b.ticket)+'</td>':'')+'<td class="sr-sag">'+srTl(b.tutar)+'</td><td>'+
+       srEsc(b.personel)+'</td><td>'+ac+'</td><td>'+srEsc(b.not)+'</td></tr>';
+  });
+  return h+'</tbody></table>';
+}
+
 </script>
 </body>
 </html>
