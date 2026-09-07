@@ -452,6 +452,16 @@ button,.sekme-btn,.ikincil,.kucuk{-webkit-tap-highlight-color:rgba(13,148,136,.1
 .sr-sp i.zr{top:14px;height:2px;background:#b9c2c9}
 .sr-kasa-not{font-size:11px;color:#6b7680;margin:6px 2px 0;line-height:1.5}
 .sr-kasa-buyuk{font-weight:700}
+.sr-sanal-tab td{vertical-align:top}
+.sr-tpers{font-size:11px;line-height:1.45}
+.sr-tpers b{font-weight:700}
+.sr-tpers span{color:#8a939b}
+.sr-tp-yok{color:#c8d0d6}
+.sr-sk{line-height:1.35;font-variant-numeric:tabular-nums}
+.sr-sk b{display:block}
+.sr-sk span{display:block;color:#8a939b;font-size:11px}
+.sr-sk i{display:block;color:#5b6770;font-size:10px;font-style:normal}
+.sr-sk-tp b{color:#1f4e79}
 .sr-ks-tur{color:#3a444c;white-space:nowrap;font-size:11px}
 .sr-ks-flag{color:#c5372c;font-weight:700}
 .sr-ks-gec{display:inline-block;margin-top:2px;background:#fdecea;color:#a3271d;border:1px solid #f1c4bf;border-radius:2px;padding:1px 5px;font-size:10px;font-weight:600;white-space:nowrap}
@@ -3782,6 +3792,77 @@ function srGec(o){
   }
   return h;
 }
+function srTerminalPersonel(den, kasa){
+  var out={};
+  function ekle(sb,term,ad,saat){
+    if(!term||!ad) return;
+    var no=parseInt(String(term).trim(),10); if(isNaN(no)) return;
+    var g=out[sb]||(out[sb]={}); var t=g[no]||(g[no]={}); var r=t[ad];
+    if(!r) t[ad]=[saat,saat];
+    else { if(saat&&saat<r[0])r[0]=saat; if(saat&&saat>r[1])r[1]=saat; }
+  }
+  ((den||{}).subeler||[]).forEach(function(sec){
+    (sec.manager||[]).forEach(function(m){ ekle(sec.sube,m.terminal,m.personel,m.saat||''); });
+  });
+  var tm=(kasa||{}).terminal||{};
+  Object.keys(tm).forEach(function(sb){ (tm[sb]||[]).forEach(function(r){ ekle(sb,r.terminal,r.personel,r.saat||''); }); });
+  return out;
+}
+function srPersHucre(pers,sb,no){
+  var g=(pers[sb]||{})[no];
+  if(!g) return '<span class="sr-tp-yok">&mdash;</span>';
+  return Object.keys(g).sort(function(a,b){return g[a][0]<g[b][0]?-1:1;}).map(function(ad){
+    var ilk=g[ad][0], son=g[ad][1];
+    return '<b>'+srEsc(ad)+'</b> <span>'+srEsc(ilk===son?ilk:(ilk+'\u2013'+son))+'</span>';
+  }).join('<br>');
+}
+function srSanalHtml(ara, den, kasa){
+  var sp=(ara||{}).sanalPersonel; if(!sp) return '';
+  var pers=srTerminalPersonel(den,kasa);
+  var KAY=['GOLDEN','GLOBAL','KIRON'];
+  var h='', varMi=false;
+  SR_SUBE.forEach(function(sb){
+    var term={};
+    KAY.forEach(function(kn){ ((sp[kn]||{})[sb]||[]).forEach(function(r){
+      var m=String(r.terminal||'').match(/(\d+)\s*$/); if(!m) return;
+      var no=parseInt(m[1],10);
+      (term[no]||(term[no]={}))[kn]=[r.stake||0,r.po||0,r.ticket||0];
+    });});
+    var nolar=Object.keys(term).map(Number).sort(function(a,b){return a-b;});
+    if(!nolar.length) return;
+    varMi=true;
+    h+='<p class="rapor-sube-ist"><b>'+sb+'</b></p>';
+    h+='<table class="ozet-tablo sr-sanal-tab"><thead><tr><th>Term.</th><th>Personel</th>'+
+       '<th class="sr-sag">Golden</th><th class="sr-sag">Global</th><th class="sr-sag">Kiron</th>'+
+       '<th class="sr-sag">Toplam</th></tr></thead><tbody>';
+    var tp={GOLDEN:[0,0,0],GLOBAL:[0,0,0],KIRON:[0,0,0]};
+    nolar.forEach(function(no){
+      h+='<tr><td><b>T'+no+'</b></td><td class="sr-tpers">'+srPersHucre(pers,sb,no)+'</td>';
+      var gt=[0,0,0];
+      KAY.forEach(function(kn){
+        var v=term[no][kn];
+        if(v){ tp[kn][0]+=v[0];tp[kn][1]+=v[1];tp[kn][2]+=v[2];
+               gt[0]+=v[0];gt[1]+=v[1];gt[2]+=v[2];
+               h+='<td class="sr-sag sr-sk"><b>'+srTl(v[0])+'</b><span>'+srTl(v[1])+'</span><i>'+srAdet(v[2])+' bilet</i></td>'; }
+        else h+='<td class="sr-sag sr-tp-yok">&mdash;</td>';
+      });
+      h+='<td class="sr-sag sr-sk sr-sk-tp"><b>'+srTl(gt[0])+'</b><span>'+srTl(gt[1])+'</span><i>'+srAdet(gt[2])+' bilet</i></td></tr>';
+    });
+    var tt=[0,0,0]; KAY.forEach(function(kn){tt[0]+=tp[kn][0];tt[1]+=tp[kn][1];tt[2]+=tp[kn][2];});
+    h+='<tr class="sr-toplam"><td><b>TOPLAM</b></td><td></td>'+
+       KAY.map(function(kn){return '<td class="sr-sag sr-sk"><b>'+srTl(tp[kn][0])+'</b><span>'+srTl(tp[kn][1])+'</span><i>'+srAdet(tp[kn][2])+' bilet</i></td>';}).join('')+
+       '<td class="sr-sag sr-sk sr-sk-tp"><b>'+srTl(tt[0])+'</b><span>'+srTl(tt[1])+'</span><i>'+srAdet(tt[2])+' bilet</i></td></tr>';
+    h+='</tbody></table>';
+  });
+  if(!varMi) return '';
+  return '<div class="rapor-bolum"><p class="rapor-bolum-bas">Sanal oyunlar &mdash; terminal bazinda</p>'+
+    '<p class="sr-kasa-not">Her hucrede sirasiyla: <b>stake</b> &middot; payout &middot; bilet adedi. '+
+    'Terminal numaralari uc panelde de ayni numaraya gore eslestirilmistir '+
+    '(Golden Cashier3, Global Kasgar3, Kiron kasgar.cashier3 = T3). '+
+    'Personel adlari Betty&rsquo;den geliyor: o gun o terminalde kasa hareketi veya terminal kapanisi '+
+    'yapan kisi, yaninda ilk ve son islem saati. Solibet Futbol terminal kirilimi vermiyor.</p>'+
+    h+'</div>';
+}
 function srKasaHtml(k){
   if(!k||!k.subeler) return '';
   var subeler=k.subeler;
@@ -3905,6 +3986,7 @@ function srHtml(d){
   }
 
   h+=srKasaHtml(d.kasa);
+  h+=srSanalHtml(d.ara, d.denetim, d.kasa);
 
   // ---- SUBE SUBE DENETIM ----
   subeler.forEach(function(s){

@@ -249,3 +249,14 @@ isaretlenir ve tek gune ait degildir.
 - **ONCEKI GUNUN DUZELTMESI** (mavi): bugunku fark, dunku farki ters yonde ve tutarca
   karsiliyor (net, buyuk olanin %5'inden kucuk). Yeni bir olay degil, dunku hatanin
   duzeltilmesi.
+
+### Sanal oyunlar — terminal bazinda
+
+`srSanalHtml(d.ara, d.denetim, d.kasa)` ciziyor; veri `ara.sanalPersonel` alanindan gelir
+(`{GOLDEN:{SUBE:[{terminal,stake,po,ticket}]}, GLOBAL:{...}, KIRON:{...}}`).
+Terminal numaralari uc panelde de numaraya gore eslestirilir (Golden Cashier3 =
+Global Kasgar3 = Kiron kasgar.cashier3 = T3).
+
+Personel adi ayri veri degil: `srTerminalPersonel()` fonksiyonu `denetim.subeler[].manager[]`
+ve `kasa.terminal[]` kayitlarindaki `personel`+`terminal`+`saat` alanlarindan cikariyor;
+vardiya degistiyse iki isim de ilk/son islem saatiyle listeleniyor.
