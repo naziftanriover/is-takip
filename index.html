@@ -3928,6 +3928,35 @@ function srKasaHtml(k){
   return h;
 }
 
+function srGeceHtml(d){
+  var g=d.geceGiris; if(!g||!(g.satirlar||[]).length) return '';
+  var hatali=g.satirlar.filter(function(r){return r.durum==='HATALI';});
+  var h='<div class="rapor-bolum"><p class="rapor-bolum-bas">Sanallar dogru basilmis mi &mdash; gece giris kontrolu</p>';
+  h+='<p class="rapor-sube-ist">'+srEsc(g.aciklama||'')+' '+
+     '<b>'+(g.satirlar.length-hatali.length)+' / '+g.satirlar.length+' giris dogru.</b>'+
+     (hatali.length?' <b class="rapor-yanlis">'+hatali.length+' HATALI.</b>':'')+'</p>';
+  if(g.kural) h+='<p class="sr-kasa-not">'+srEsc(g.kural)+'</p>';
+  h+='<table class="ozet-tablo"><thead><tr><th></th><th>Sube</th><th>Personel</th><th>Saat</th><th>Kanal</th>'+
+     '<th>Ticket</th><th class="sr-sag">Betty ye girilen</th><th class="sr-sag">Panel (net)</th>'+
+     '<th class="sr-sag">Fark</th><th>Not</th></tr></thead><tbody>';
+  g.satirlar.forEach(function(r){
+    var ok=r.durum!=='HATALI';
+    h+='<tr class="'+(ok?'sr-ok':'sr-yok')+'"><td class="sr-ik">'+(ok?'&#10003;':'&#10007;')+'</td>'+
+       '<td><b>'+srEsc(r.sube)+'</b></td><td>'+srEsc(r.personel)+'</td><td>'+srEsc(r.saat)+'</td>'+
+       '<td><b>'+srEsc(r.kanal)+'</b></td><td>'+srEsc(r.ticket||'-')+'</td>'+
+       '<td class="sr-kk sr-sag"><b>'+srTl(r.girilenStake)+'</b><span>'+srTl(r.girilenPayout)+'</span></td>'+
+       '<td class="sr-kk sr-sag"><b>'+srTl(r.panelStake)+'</b><span>'+srTl(r.panelPayout)+'</span></td>'+
+       '<td class="sr-sag '+(ok?'':'rapor-yanlis')+'"><b>'+(r.fark?srTl(r.fark):'&mdash;')+'</b></td>'+
+       '<td>'+srEsc(r['not']||'')+'</td></tr>';
+  });
+  h+='</tbody></table><p class="sr-kasa-not">Her hucrede ustte <b>bahis</b>, altta odeme. '+
+     'Gece kapanisinda mudur panellere bakip stake ve payout u Betty ye elle girer; her kanal ayri bir ticket olur '+
+     've ana kasa terminalinde toplanir. Girilen rakam panelin NET rakamiyla tutmuyorsa fark dogrudan kasa farkina yansir.<br>'+
+     '<b>Dikkat:</b> futbol odemesi tek bilete sigmazsa ikinci bilet acilarak bolunur ve ikinci biletin bahsi 0,01 TL olur. '+
+     'Bu normal prosedurdur, bulgu degildir.</p></div>';
+  return h;
+}
+
 /* === YENI FORMAT OZETI (ara.subeler) - 2026-09-07 ve sonrasi === */
 function srYeniHtml(d){
   var ara=d.ara||{}, kasa=d.kasa||{}, den=d.denetim||{};
@@ -4107,6 +4136,7 @@ function srHtml(d){
   }
 
   }
+  if(YENI) h+=srGeceHtml(d);
   if(!YENI) h+=srKasaHtml(d.kasa);
   h+=srSanalHtml(d.ara, d.denetim, d.kasa);
 
