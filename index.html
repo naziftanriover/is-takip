@@ -3824,10 +3824,11 @@ function srPersHucre(pers,sb,no){
 }
 function srSanalHtml(ara, den, kasa){
   var sp=(ara||{}).sanalPersonel; if(!sp) return '';
+  var SUBELER=Object.keys(((ara||{}).subeler)||{}); if(!SUBELER.length) SUBELER=SR_SUBE;
   var pers=srTerminalPersonel(den,kasa);
-  var KAY=['GOLDEN','GLOBAL','KIRON'];
+  var KAY=['GOLDEN','GLOBAL','KIRON','FUTBOL'];
   var h='', varMi=false;
-  SR_SUBE.forEach(function(sb){
+  SUBELER.forEach(function(sb){
     var term={};
     KAY.forEach(function(kn){ ((sp[kn]||{})[sb]||[]).forEach(function(r){
       var m=String(r.terminal||'').match(/(\d+)\s*$/); if(!m) return;
@@ -3839,9 +3840,9 @@ function srSanalHtml(ara, den, kasa){
     varMi=true;
     h+='<p class="rapor-sube-ist"><b>'+sb+'</b></p>';
     h+='<table class="ozet-tablo sr-sanal-tab"><thead><tr><th>Term.</th><th>Personel</th>'+
-       '<th class="sr-sag">Golden</th><th class="sr-sag">Global</th><th class="sr-sag">Kiron</th>'+
+       '<th class="sr-sag">Golden</th><th class="sr-sag">Global</th><th class="sr-sag">Kiron</th><th class="sr-sag">Futbol</th>'+
        '<th class="sr-sag">Toplam</th></tr></thead><tbody>';
-    var tp={GOLDEN:[0,0,0],GLOBAL:[0,0,0],KIRON:[0,0,0]};
+    var tp={GOLDEN:[0,0,0],GLOBAL:[0,0,0],KIRON:[0,0,0],FUTBOL:[0,0,0]};
     nolar.forEach(function(no){
       h+='<tr><td><b>T'+no+'</b></td><td class="sr-tpers">'+srPersHucre(pers,sb,no)+'</td>';
       var gt=[0,0,0];
@@ -3927,39 +3928,34 @@ function srKasaHtml(k){
   return h;
 }
 
-/* === YENI FORMAT (ara.subeler) - 2026-09-07 ve sonrasi === */
+/* === YENI FORMAT OZETI (ara.subeler) - 2026-09-07 ve sonrasi === */
 function srYeniHtml(d){
   var ara=d.ara||{}, kasa=d.kasa||{}, den=d.denetim||{};
   var sub=ara.subeler||{}, adlar=Object.keys(sub);
   var sirket=ara.sirket||{stake:0,payout:0,bilet:0,kar:0};
-  var kaynaklar=ara.kaynaklar||['Betty','Golden','Global','Kiron','Futbol'];
+  var kay=ara.kaynaklar_ad||['Betty','Golden','Global','Kiron','Futbol'];
   var bul=den.bulgular||[], sayim=kasa.sayim||[];
   var SEV={y:['YUKSEK','kirmizi'],o:['ORTA','amber'],n:['NOT','gri'],t:['TEMIZ','gri']};
-  function rz(s){ var o=SEV[s]||SEV.n; return '<span class="rozet '+o[1]+'">'+o[0]+'</span>'; }
+  function rz(s){var o=SEV[s]||SEV.n;return '<span class="rozet '+o[1]+'">'+o[0]+'</span>';}
   var ny=bul.filter(function(b){return b.seviye==='y';}).length;
   var no=bul.filter(function(b){return b.seviye==='o';}).length;
+  var kasaTop=0; adlar.forEach(function(s){kasaTop+=((kasa.subeler||{})[s]||{}).tutar||0;});
 
-  var kasaTop=0; adlar.forEach(function(s){ kasaTop+=((kasa.subeler||{})[s]||{}).tutar||0; });
-
-  /* --- 1. SIRKET TOPLAMI --- */
   var h='<div class="rapor-ay-ozet"><p class="ozet-baslik">'+srEsc(d.gun||d.tarih||'')+' &mdash; gunluk sube raporu</p>'+
     '<div class="ozet-satir">'+
     '<span>Bahis <b>'+srTl(sirket.stake)+'</b></span>'+
     '<span>Odeme <b>'+srTl(sirket.payout)+'</b></span>'+
-    '<span>Bilet <b>'+srAdet(sirket.bilet)+'</b></span>'+
     '<span>Gun kari <b class="'+((sirket.kar||0)>=0?'rapor-dogru':'rapor-yanlis')+'">'+srTl(sirket.kar)+'</b></span>'+
     '<span>Kasa farki <b class="'+(kasaTop>=0?'rapor-dogru':'rapor-yanlis')+'">'+srTl(kasaTop)+'</b></span>'+
     '<span><b>'+ny+'</b> yuksek &middot; <b>'+no+'</b> orta bulgu</span>'+
     '</div></div>';
 
-  /* --- 2. ARA RAPOR BANDI --- */
   h+='<div class="rapor-bolum"><p class="rapor-bolum-bas">Ne oldu &mdash; sube sube</p>';
   h+='<table class="ozet-tablo"><thead><tr><th>Sube</th><th class="sr-sag">Bahis</th><th class="sr-sag">Odeme</th>'+
      '<th class="sr-sag">Kar / Zarar</th><th class="sr-sag">Bilet</th><th class="sr-sag">Kasa farki</th>'+
      '<th>Kapatan</th><th>Saat</th></tr></thead><tbody>';
   adlar.forEach(function(sb){
-    var t=(sub[sb]||{}).toplam||{}, k=(kasa.subeler||{})[sb]||{};
-    var kf=k.tutar;
+    var t=(sub[sb]||{}).toplam||{}, k=(kasa.subeler||{})[sb]||{}, kf=k.tutar;
     h+='<tr><td><b>'+srEsc(sb)+'</b></td>'+
        '<td class="sr-sag">'+srTl(t.stake)+'</td><td class="sr-sag">'+srTl(t.payout)+'</td>'+
        '<td class="sr-sag '+((t.kar||0)>=0?'rapor-dogru':'rapor-yanlis')+'"><b>'+srTl(t.kar)+'</b></td>'+
@@ -3974,73 +3970,77 @@ function srYeniHtml(d){
      '<td class="sr-sag '+(kasaTop>=0?'rapor-dogru':'rapor-yanlis')+'"><b>'+srTl(kasaTop)+'</b></td>'+
      '<td colspan="2"></td></tr></tbody></table>';
 
-  /* kaynak kirilimi */
-  h+='<p class="rapor-sube-ist">Kaynak kirilimi &mdash; bahis &middot; odeme &middot; bilet</p>';
-  h+='<table class="ozet-tablo"><thead><tr><th>Sube</th>'+kaynaklar.map(function(q){return '<th>'+srEsc(q)+'</th>';}).join('')+'</tr></thead><tbody>';
+  h+='<p class="rapor-sube-ist">Kaynak kirilimi &mdash; bahis &middot; odeme &middot; bilet. '+
+     '<b>Betty sutunundan sanal ve futbol dusulmustur</b>, bes sutunun toplami Betty toplamina esittir.</p>';
+  h+='<table class="ozet-tablo"><thead><tr><th>Sube</th>'+kay.map(function(q){return '<th>'+srEsc(q)+'</th>';}).join('')+
+     '<th class="sr-sag">Betty ham</th></tr></thead><tbody>';
   adlar.forEach(function(sb){
-    var kk=(sub[sb]||{}).kaynak||{};
-    h+='<tr><td><b>'+srEsc(sb)+'</b></td>'+kaynaklar.map(function(q){
+    var kk=(sub[sb]||{}).kaynak||{}, ham=(sub[sb]||{}).bettyHam||{};
+    h+='<tr><td><b>'+srEsc(sb)+'</b></td>'+kay.map(function(q){
       var v=kk[q]||{stake:0,payout:0,bilet:0};
       return '<td class="sr-kk"><b>'+srTl(v.stake)+'</b><span>'+srTl(v.payout)+'</span><i>'+srAdet(v.bilet)+' bilet</i></td>';
-    }).join('')+'</tr>';
+    }).join('')+'<td class="sr-kk sr-sag"><b>'+srTl(ham.stake)+'</b><span>'+srTl(ham.payout)+'</span></td></tr>';
   });
   h+='</tbody></table></div>';
 
-  /* --- 3. KIM EKSIK KIM FAZLA --- */
   if(sayim.length){
     h+='<div class="rapor-bolum"><p class="rapor-bolum-bas">Kim eksik, kim fazla verdi</p>';
-    h+='<p class="rapor-sube-ist">Her kasiyerin kendi kapanisi. Sayim sirasinda nakit sayilir, personelin aldigi '+
-       'futbol ve sanal bahisler nakitten dusulur; kalan rakam Betty\'ye girilir. Yani asagidaki fark, sanal ve '+
-       'futbol dahil edilmis net kasa farkidir.</p>';
-    h+='<table class="ozet-tablo"><thead><tr><th>Personel</th><th>Sube</th><th>Terminal</th>'+
+    h+='<p class="rapor-sube-ist">Sayim sirasinda once nakit sayilir, personelin aldigi futbol ve sanal bahisler '+
+       'nakitten dusulur, kalan rakam Betty\'ye girilir. Asagidaki fark sanal ve futbol dahil edilmis net kasa farkidir. '+
+       'Vardiya degisiminde kasa sifirlanmaz, sadece fark alinir ve kasa devredilir.</p>';
+    h+='<table class="ozet-tablo"><thead><tr><th>Personel</th><th>Sube</th><th>Term.</th><th>Saat</th>'+
        '<th class="sr-sag">Fark</th></tr></thead><tbody>';
-    sayim.forEach(function(p){
-      var f=p.fark||0, buyuk=Math.abs(f)>=1000;
+    sayim.forEach(function(p){var f=p.fark||0;
       h+='<tr><td><b>'+srEsc(p.personel)+'</b></td><td>'+srEsc(p.sube)+'</td><td>t'+srEsc(p.terminal)+'</td>'+
-         '<td class="sr-sag '+(f>=0?'rapor-dogru':'rapor-yanlis')+(buyuk?' sr-kasa-buyuk':'')+'"><b>'+srTl(f)+'</b></td></tr>';
-    });
+         '<td>'+srEsc(p.saat||'')+'</td><td class="sr-sag '+(f>=0?'rapor-dogru':'rapor-yanlis')+
+         (Math.abs(f)>=1000?' sr-kasa-buyuk':'')+'"><b>'+srTl(f)+'</b></td></tr>';});
     h+='</tbody></table>';
-    /* kasiyer vs ana kasa */
     h+='<p class="rapor-sube-ist">Farkin nereden geldigi &mdash; kasiyer kasalari mi, ana kasa mi</p>';
     h+='<table class="ozet-tablo"><thead><tr><th>Sube</th><th class="sr-sag">Kasiyerler toplami</th>'+
        '<th class="sr-sag">Ana kasa</th><th class="sr-sag">Sube farki</th></tr></thead><tbody>';
-    adlar.forEach(function(sb){
-      var k=(kasa.subeler||{})[sb]||{};
+    adlar.forEach(function(sb){var k=(kasa.subeler||{})[sb]||{};
       h+='<tr><td><b>'+srEsc(sb)+'</b></td>'+
          '<td class="sr-sag '+((k.kasiyerToplam||0)>=0?'rapor-dogru':'rapor-yanlis')+'">'+srTl(k.kasiyerToplam)+'</td>'+
          '<td class="sr-sag '+((k.anaKasa||0)>=0?'rapor-dogru':'rapor-yanlis')+'">'+srTl(k.anaKasa)+'</td>'+
-         '<td class="sr-sag '+((k.tutar||0)>=0?'rapor-dogru':'rapor-yanlis')+'"><b>'+srTl(k.tutar)+'</b></td></tr>';
-    });
-    h+='</tbody></table></div>';
+         '<td class="sr-sag '+((k.tutar||0)>=0?'rapor-dogru':'rapor-yanlis')+'"><b>'+srTl(k.tutar)+'</b></td></tr>';});
+    h+='</tbody></table>';
+    if((kasa.mudurDevir||[]).length){
+      h+='<p class="rapor-sube-ist">Mudur vardiya devri &mdash; ana kasa terminali (kasiyer farki degildir)</p>';
+      h+='<table class="ozet-tablo"><thead><tr><th>Sube</th><th>Saat</th><th>Term.</th><th>Personel</th>'+
+         '<th class="sr-sag">Tutar</th></tr></thead><tbody>';
+      kasa.mudurDevir.forEach(function(m){
+        h+='<tr><td><b>'+srEsc(m.sube)+'</b></td><td>'+srEsc(m.saat)+'</td><td>t'+srEsc(m.terminal)+'</td>'+
+           '<td>'+srEsc(m.personel)+'</td><td class="sr-sag">'+srTl(m.tutar)+'</td></tr>';});
+      h+='</tbody></table>';
+    }
+    h+='</div>';
   }
 
-  /* --- 4. BAKILMASI GEREKENLER --- */
   if(bul.length){
     h+='<div class="rapor-bolum"><p class="rapor-bolum-bas">Bakilmasi gerekenler</p>';
     bul.forEach(function(b){
       h+='<div class="sr-bulgu"><p class="sr-bulgu-bas">'+rz(b.seviye)+' '+srEsc(b.baslik)+'</p>'+
-         '<p class="sr-bulgu-ac">'+srEsc(b.aciklama)+'</p></div>';
-    });
+         '<p class="sr-bulgu-ac">'+srEsc(b.aciklama)+'</p></div>';});
     h+='</div>';
   }
-  if((den.notlar||[]).length){
-    h+='<div class="rapor-bolum"><p class="rapor-bolum-bas">Notlar</p><ul class="sr-notlar">'+
-       den.notlar.map(function(n){return '<li>'+srEsc(n)+'</li>';}).join('')+'</ul></div>';
-  }
-
-  /* --- 5. YONTEM --- */
-  h+='<div class="rapor-bolum"><p class="rapor-bolum-bas">Yontem</p><p class="rapor-sube-ist">'+
-     'Kaynaklar: '+kaynaklar.map(srEsc).join(' &middot; ')+'. Kasa farki Betty Transaction Audit &rarr; '+
-     'Cash Shop Discrepancy Up (88) / Down (89); kasiyer farklari Cash Term Discrepancy Up (90) / Down (91). '+
-     'Oyun gunu saat 20:00 sinirina gore belirlenir: 20:00 oncesindeki kapanis kaydi bir onceki gune aittir. '+
+  return h;
+}
+function srYontemHtml(d){
+  var n=[].concat(((d.ara||{}).notlar)||[], ((d.denetim||{}).notlar)||[], ((d.kasa||{}).notlar)||[]);
+  var h='';
+  if(n.length) h+='<div class="rapor-bolum"><p class="rapor-bolum-bas">Notlar ve yontem</p><ul class="sr-notlar">'+
+    n.map(function(x){return '<li>'+srEsc(x)+'</li>';}).join('')+'</ul></div>';
+  h+='<div class="rapor-bolum"><p class="sr-kasa-not">Kasa farki: Transaction Audit &rarr; Cash Shop Discrepancy Up (88) / Down (89). '+
+     'Kasiyer farki: Cash Term Discrepancy Up (90) / Down (91) &mdash; terminal bakiyesini sifirlamayan kayitlar. '+
+     'Mudur-kasiyer hareketleri: Till1CashIn / Till1CashOut, tutar ve aciklamadaki isim ile eslestirildi. '+
+     'Kanal: aciklamadaki hesap numarasi 6 haneli ise ONLINE, 8-10 haneli ise 365, digerleri kanal disi. '+
      'Rakamlarin tamami panellerden alinmistir; veri gelmeyen alana "veri yok" yazilir.'+
-     (d.olusturmaISO?'<br>Olusturma: '+srEsc(d.olusturmaISO)+' &middot; '+srEsc(d.kaynak||''):'')+
-     '</p></div>';
+     (d.olusturmaISO?'<br>Olusturma: '+srEsc(d.olusturmaISO)+' &middot; '+srEsc(d.kaynak||''):'')+'</p></div>';
   return h;
 }
 
 function srHtml(d){
-  if((d&&d.ara&&d.ara.subeler)){ return srYeniHtml(d); }
+  var YENI=!!(d&&d.ara&&d.ara.subeler);
   var ara=d.ara||{}, den=d.denetim||{}, kan=d.kanal||{};
   var subeler=den.subeler||[];
   var tum=[]; subeler.forEach(function(s){ tum=tum.concat(s.inout||[],s.stake||[],s.po||[]); });
@@ -4049,7 +4049,9 @@ function srHtml(d){
   var eksik=0; subeler.forEach(function(s){ eksik+=((s.managerOzet||{}).sorunlu)||0; });
   var uyus=0; Object.keys(kan.subeler||{}).forEach(function(k){ uyus+=((kan.subeler[k].uyusmaz)||[]).length; });
 
-  var h='<div class="rapor-ay-ozet"><p class="ozet-baslik">'+srEsc(d.tarih||'')+
+  var h='';
+  if(YENI){ h=srYeniHtml(d); } else {
+  h='<div class="rapor-ay-ozet"><p class="ozet-baslik">'+srEsc(d.tarih||'')+
     (d.gun?' &middot; '+srEsc(d.gun):'')+'</p><div class="ozet-satir">'+
     '<span><b>'+ny+'</b> yuksek oncelikli bulgu</span>'+
     '<span><b>'+no+'</b> orta oncelikli bulgu</span>'+
@@ -4104,7 +4106,8 @@ function srHtml(d){
     h+='</div>';
   }
 
-  h+=srKasaHtml(d.kasa);
+  }
+  if(!YENI) h+=srKasaHtml(d.kasa);
   h+=srSanalHtml(d.ara, d.denetim, d.kasa);
 
   // ---- SUBE SUBE DENETIM ----
@@ -4186,6 +4189,7 @@ function srHtml(d){
     h+='<div class="rapor-bolum"><p class="rapor-bolum-bas">Kurus duzeltmeleri (5 TL alti &mdash; rapora alinmadi)</p><p class="rapor-sube-ist">'+
        den.kurus.map(function(k){ return srEsc(k.sube)+' '+srEsc(k.personel)+' <b>'+k.adet+'</b>'; }).join(' &middot; ')+'</p></div>';
   }
+  if(YENI) h+=srYontemHtml(d);
   return h;
 }
 
