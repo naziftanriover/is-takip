@@ -3777,11 +3777,16 @@ async function srGoster(gun){
   var el=$('srIcerik');
   if(!gun){ el.innerHTML='<p class="bos-satir">Gun secilmedi.</p>'; return; }
   el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
-  var d=srCache[gun];
-  if(!d){ var s=await db.collection('subeRaporu').doc(gun).get();
-    if(!s.exists){ el.innerHTML='<p class="bos-satir">Bu gune ait rapor yok.</p>'; return; }
-    d=srCache[gun]=s.data(); }
-  el.innerHTML=srHtml(d);
+  try{
+    var d=srCache[gun];
+    if(!d){ var s=await db.collection('subeRaporu').doc(gun).get();
+      if(!s.exists){ el.innerHTML='<p class="bos-satir">Bu gune ait rapor yok.</p>'; return; }
+      d=srCache[gun]=s.data(); }
+    el.innerHTML=srHtml(d);
+  }catch(e){
+    el.innerHTML='<p class="bos-satir">Rapor gosterilemedi ('+srEsc(e&&e.message||'bilinmeyen hata')+'). '+
+      'Rapor bicimi degismis olabilir; gelistiriciye bildirin.</p>';
+  }
 }
 
 function srGec(o){
@@ -4072,6 +4077,8 @@ function srHtml(d){
   var YENI=!!(d&&d.ara&&d.ara.subeler);
   var ara=d.ara||{}, den=d.denetim||{}, kan=d.kanal||{};
   var subeler=den.subeler||[];
+  // seriler eski formatta dizi, yeni raporda ozet objesi ({aciklama}) olabilir; diziye normalize et
+  var seriler=Array.isArray(den.seriler)?den.seriler:[];
   var tum=[]; subeler.forEach(function(s){ tum=tum.concat(s.inout||[],s.stake||[],s.po||[]); });
   var ny=tum.filter(function(b){return b.sev==='yuksek';}).length;
   var no=tum.filter(function(b){return b.sev==='orta';}).length;
@@ -4085,7 +4092,7 @@ function srHtml(d){
     '<span><b>'+ny+'</b> yuksek oncelikli bulgu</span>'+
     '<span><b>'+no+'</b> orta oncelikli bulgu</span>'+
     '<span><b>'+eksik+'</b> karsiliksiz kasa kaydi</span>'+
-    '<span><b>'+((den.seriler||[]).length)+'</b> pes pese duzeltme serisi</span>'+
+    '<span><b>'+(seriler.length)+'</b> pes pese duzeltme serisi</span>'+
     '<span><b>'+uyus+'</b> kanal yazim uyusmazligi</span></div></div>';
 
   // ---- ARA RAPOR ----
@@ -4203,7 +4210,7 @@ function srHtml(d){
     }
 
     // seriler
-    (den.seriler||[]).filter(function(x){return x.sube===s.sube;}).forEach(function(sr){
+    seriler.filter(function(x){return x.sube===s.sube;}).forEach(function(sr){
       h+='<p class="rapor-sube-ist">Pes pese duzeltme serisi &mdash; <b>'+srEsc(sr.personel)+'</b> &middot; '+
          srEsc(sr.baslangic)+'-'+srEsc(sr.bitis)+' arasi '+sr.adet+' kayit, toplam '+srTl(sr.toplam)+' TL</p>';
       h+='<table class="ozet-tablo"><thead><tr><th>Saat</th><th>Islem turu</th><th>Ticket</th><th class="sr-sag">Tutar</th><th>Aciklama</th></tr></thead><tbody>';
