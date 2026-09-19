@@ -877,10 +877,10 @@ const AUDIT_ITEMS=[
 // Sube personelleri (rotalardan; garson/temizlikci haric). Hata yapan personel secimi icin.
 // Personel kendi subesi disinda da calisabildigi icin secimde TUM personel gruplu gosterilir.
 const SUBE_PERSONEL={
-  'Alsancak (Girne)':['BETÜL','BURAK A','BURHAN','HALİL','HASAN','OZAN','PINAR'],
-  'Kaşgar (Girne)':['BURCU','DİLAN','İREM','EYLÜL','HANİFİ','HÜLYA','OLCAY','ÖMER','YAKUP'],
-  'Zeytinlik (Girne)':['BEYZA','BURAK M.','CANDAN','GÜLÇİN','NİDA','ÖZGE','SELCAN','ŞÜKRİYE'],
-  'İtimat (Mağusa)':['AZRA','BARIŞ','BAYRAM','CUMALİ','DOĞUKAN','ELNAZ','İLKER','MELDA','MERVE'],
+  'Alsancak (Girne)':['BETÜL','BURAK A','BURHAN','GÜLÇİN','HALİL','NİDA','OZAN','PINAR','SEVGİ'],
+  'Kaşgar (Girne)':['BURCU','DİLAN','EYLÜL','HANİFİ','HASAN','HÜLYA','NURTEN','OLCAY','ÖMER','SALİH','SELCAN','YAKUP'],
+  'Zeytinlik (Girne)':['AHMET K','BEYZA','BURAK M.','BUSE','CANDAN','İREM','MEHMET G','MERVE','ÖZGE','ŞÜKRİYE'],
+  'İtimat (Mağusa)':['AZRA','BARIŞ','BAYRAM','CUMALİ','DOĞUKAN','ELNAZ','EMİNE','İLKER','MEHMET A','MELDA'],
   'Bölge / Gezici':['DURMUŞ ALİ'],
 };
 // Sonradan (uygulama icinden) eklenen personel Firestore'da 'personnel' koleksiyonunda tutulur.
@@ -2766,10 +2766,14 @@ function cdSayimTopla(sayim, idx, subeKey){
     if(!r || typeof r.fark!=='number') return;
     var k=cdNormAd(r.personel); if(!k) return;
     var can=idx[k];
-    var ad = can ? can.ad : k;
-    var sube = can ? can.sube : (subeKey[cdNormAd(r.sube)]||'');
-    if(!out[ad]) out[ad]={personel:ad, sube:sube, fark:0, key:k.replace(/ /g,'_')};
-    out[ad].fark += Number(r.fark)||0;
+    var ad = can ? can.ad : k;                                  // yazim sabit listeden duzeltilir
+    // SUBE HER ZAMAN RAPORUN KAYDINDAN GELIR. Personel subeler arasi rotasyon yaptigi icin
+    // sabit liste dogru sube bilgisi veremez; liste sadece ad yazimi icin kullanilir.
+    var sube = subeKey[cdNormAd(String(r.sube||''))] || (can ? can.sube : '');
+    var sk = cdNormAd(String(sube).split('(')[0]).replace(/ /g,'');
+    var ok = ad+'|'+sube;   // ayni kisi iki subede calistiysa iki ayri kayit olur
+    if(!out[ok]) out[ok]={personel:ad, sube:sube, fark:0, key:(k.replace(/ /g,'_')+(sk?'_'+sk:''))};
+    out[ok].fark += Number(r.fark)||0;
   });
   Object.keys(out).forEach(function(a){ out[a].fark=Math.round(out[a].fark*100)/100; });
   return out;
@@ -2807,18 +2811,31 @@ async function cashDiffRapordanAktar(){
         var sayim=(((s.data()||{}).kasa)||{}).sayim;
         if(!Array.isArray(sayim) || !sayim.length) continue;
         var topla=cdSayimTopla(sayim, idx, subeKey);
+        // ANA KASA: mudur kasasinin farki kasiyer sayim listesinde YOKTUR (ana kasa terminalinin
+        // 90/91 kayitlari mudur devri sayilir). Eklenmezse gunluk toplam sube farkina esit olmaz.
+        try{
+          var kasaSb=(((s.data()||{}).kasa)||{}).subeler||{};
+          Object.keys(kasaSb).forEach(function(sb){
+            var kk=kasaSb[sb]; if(!kk || typeof kk.anaKasa!=='number') return;
+            if(Math.abs(kk.anaKasa)<0.005) return;
+            var sd=subeKey[cdNormAd(String(sb))]||''; if(!sd) return;
+            var sk2=cdNormAd(String(sd).split('(')[0]).replace(/ /g,'');
+            topla['ANA KASA|'+sd]={personel:'ANA KASA', sube:sd,
+              fark:Math.round(kk.anaKasa*100)/100, key:'ANA_KASA_'+sk2};
+          });
+        }catch(e){ console.error('ana kasa aktarim',gun,e); }
         var adlar=Object.keys(topla); if(!adlar.length) continue;
         // O gunun mevcut cashDiff kayitlari: personel -> id
         var mevcut={};
         var gs=await db.collection('cashDiff').where('date','==',gun).get();
-        gs.docs.forEach(function(d){ var o=d.data(); if(o&&o.personel) mevcut[o.personel]={id:d.id}; });
+        gs.docs.forEach(function(d){ var o=d.data(); if(o&&o.personel) mevcut[o.personel+'|'+(o.sube||'')]={id:d.id}; });
         for(var ai=0; ai<adlar.length; ai++){
           var it=topla[adlar[ai]];
           try{
-            if(mevcut[it.personel]){
+            if(mevcut[it.personel+'|'+it.sube]){
               // Var olan kaydi rapor degeriyle guncelle (rapor esas)
-              await db.collection('cashDiff').doc(mevcut[it.personel].id)
-                .update({date:gun, personel:it.personel, fark:it.fark, kaynak:'rapor'});
+              await db.collection('cashDiff').doc(mevcut[it.personel+'|'+it.sube].id)
+                .update({date:gun, personel:it.personel, sube:it.sube, fark:it.fark, kaynak:'rapor'});
             } else {
               // Yeni: deterministik kimlik -> es zamanli yarista cift kayit olmaz
               await db.collection('cashDiff').doc('r_'+gun+'_'+it.key)
