@@ -2736,132 +2736,12 @@ function cashFarkKur(){ if(cfKurulu) return; cfKurulu=true;
   const btn=$('cfKaydet'); if(btn) btn.addEventListener('click',cashFarkGridKaydet);
   const tar=$('cfTarih'); if(tar) tar.addEventListener('change',cashFarkGridYukle);
 }
-// ===== Sube raporundan personel SAYIM farklarini Cash Difference'a otomatik aktar =====
-// Kaynak: subeRaporu/{gun}.kasa.sayim = gercek sayim farklari (terminal sifirlama/devir HARIC;
-// raporun kendisi ayirir). Her rapor gunu bir kez otomatik islenir; islenen gunun cashDiff
-// kayitlarina kaynak:'rapor' etiketi konur, boylece gun bir daha otomatik islenmez (elle
-// duzenlemen korunur). Ilk aktarimda ayni gun+personel varsa uzerine yazilir (rapor esas).
-// Not: koda Turkce literal eklememek icin harfler \u kacisi ile normalize edilir.
-function cdNormAd(s){
-  s=String(s==null?'':s);
-  try{ s=s.toLocaleUpperCase('tr'); }catch(e){ s=s.toUpperCase(); }
-  s=s.replace(/\u0130/g,'I').replace(/\u00DC/g,'U').replace(/\u00D6/g,'O')
-     .replace(/\u015E/g,'S').replace(/\u00C7/g,'C').replace(/\u011E/g,'G').replace(/\u00C2/g,'A');
-  return s.replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
-}
-// Betty sube adi -> SUBE_PERSONEL anahtari (anahtarlar listeden turetilir, literal yok)
-function cdSubeKeyMap(){
-  var m={}; Object.keys(SUBE_PERSONEL).forEach(function(k){ m[cdNormAd(k.split('(')[0])]=k; }); return m;
-}
-// Kanonik personel indeksi: normAd -> {ad, sube}
-function cdKanonikIndeks(){
-  var m=tumPersonelMap(), idx={};
-  Object.keys(m).forEach(function(sube){ m[sube].forEach(function(ad){ idx[cdNormAd(ad)]={ad:ad,sube:sube}; }); });
-  return idx;
-}
-// Bir gunun sayim dizisini personel bazinda toplar (kanonik ad + sube)
-function cdSayimTopla(sayim, idx, subeKey){
-  var out={};
-  (sayim||[]).forEach(function(r){
-    if(!r || typeof r.fark!=='number') return;
-    var k=cdNormAd(r.personel); if(!k) return;
-    var can=idx[k];
-    var ad = can ? can.ad : k;                                  // yazim sabit listeden duzeltilir
-    // SUBE HER ZAMAN RAPORUN KAYDINDAN GELIR. Personel subeler arasi rotasyon yaptigi icin
-    // sabit liste dogru sube bilgisi veremez; liste sadece ad yazimi icin kullanilir.
-    var sube = subeKey[cdNormAd(String(r.sube||''))] || (can ? can.sube : '');
-    var sk = cdNormAd(String(sube).split('(')[0]).replace(/ /g,'');
-    var ok = ad+'|'+sube;   // ayni kisi iki subede calistiysa iki ayri kayit olur
-    if(!out[ok]) out[ok]={personel:ad, sube:sube, fark:0, key:(k.replace(/ /g,'_')+(sk?'_'+sk:''))};
-    out[ok].fark += Number(r.fark)||0;
-  });
-  Object.keys(out).forEach(function(a){ out[a].fark=Math.round(out[a].fark*100)/100; });
-  return out;
-}
-var cdAktarmaCalisiyor=false;
-async function cashDiffRapordanAktar(){
-  if(cdAktarmaCalisiyor) return 0;
-  // Sadece yazabilen ekip: salt-okunur (GM) veya oturum yoksa atla
-  if(document.body.classList.contains('salt-okunur')) return 0;
-  var uid = auth.currentUser ? auth.currentUser.uid : null; if(!uid) return 0;
-  cdAktarmaCalisiyor=true;
-  var yazilan=0;
-  try{
-    var liste=[];
-    try{ var ix=await db.collection('subeRaporu').doc('gunler').get();
-      if(ix.exists && Array.isArray((ix.data()||{}).liste)) liste=ix.data().liste.slice();
-    }catch(e){ return 0; }
-    if(!liste.length) return 0;
-    liste.sort(function(a,b){ return a<b?1:(a>b?-1:0); });     // yeniden eskiye
-    liste=liste.slice(0,45);                                   // makul pencere
-    // Zaten aktarilmis gunler: cashDiff'te kaynak='rapor' olan tarihler
-    var islenmis={};
-    try{
-      var snap=await db.collection('cashDiff').where('kaynak','==','rapor').get();
-      snap.docs.forEach(function(d){ var o=d.data(); if(o&&o.date) islenmis[o.date]=true; });
-    }catch(e){}
-    var yeniGunler=liste.filter(function(g){ return !islenmis[g]; });
-    if(!yeniGunler.length) return 0;
-    var idx=cdKanonikIndeks(), subeKey=cdSubeKeyMap();
-    for(var gi=0; gi<yeniGunler.length; gi++){
-      var gun=yeniGunler[gi];
-      try{
-        var s=await db.collection('subeRaporu').doc(gun).get();
-        if(!s.exists) continue;
-        var sayim=(((s.data()||{}).kasa)||{}).sayim;
-        if(!Array.isArray(sayim) || !sayim.length) continue;
-        var topla=cdSayimTopla(sayim, idx, subeKey);
-        // ANA KASA: mudur kasasinin farki kasiyer sayim listesinde YOKTUR (ana kasa terminalinin
-        // 90/91 kayitlari mudur devri sayilir). Eklenmezse gunluk toplam sube farkina esit olmaz.
-        try{
-          var kasaSb=(((s.data()||{}).kasa)||{}).subeler||{};
-          Object.keys(kasaSb).forEach(function(sb){
-            var kk=kasaSb[sb]; if(!kk || typeof kk.anaKasa!=='number') return;
-            if(Math.abs(kk.anaKasa)<0.005) return;
-            var sd=subeKey[cdNormAd(String(sb))]||''; if(!sd) return;
-            var sk2=cdNormAd(String(sd).split('(')[0]).replace(/ /g,'');
-            topla['ANA KASA|'+sd]={personel:'ANA KASA', sube:sd,
-              fark:Math.round(kk.anaKasa*100)/100, key:'ANA_KASA_'+sk2};
-          });
-        }catch(e){ console.error('ana kasa aktarim',gun,e); }
-        var adlar=Object.keys(topla); if(!adlar.length) continue;
-        // O gunun mevcut cashDiff kayitlari: personel -> id
-        var mevcut={};
-        var gs=await db.collection('cashDiff').where('date','==',gun).get();
-        gs.docs.forEach(function(d){ var o=d.data(); if(o&&o.personel) mevcut[o.personel+'|'+(o.sube||'')]={id:d.id}; });
-        for(var ai=0; ai<adlar.length; ai++){
-          var it=topla[adlar[ai]];
-          try{
-            if(mevcut[it.personel+'|'+it.sube]){
-              // Var olan kaydi rapor degeriyle guncelle (rapor esas)
-              await db.collection('cashDiff').doc(mevcut[it.personel+'|'+it.sube].id)
-                .update({date:gun, personel:it.personel, sube:it.sube, fark:it.fark, kaynak:'rapor'});
-            } else {
-              // Yeni: deterministik kimlik -> es zamanli yarista cift kayit olmaz
-              await db.collection('cashDiff').doc('r_'+gun+'_'+it.key)
-                .set({date:gun, personel:it.personel, sube:it.sube, fark:it.fark, note:'',
-                      kaynak:'rapor', createdBy:uid, createdAt:SUNUCU_ZAMAN()});
-            }
-            yazilan++;
-          }catch(e){ console.error('cashDiff aktar (kayit)',gun,it.personel,e); }
-        }
-      }catch(e){ console.error('cashDiff aktar (gun)',gun,e); }
-    }
-    if(yazilan){ try{ await logYaz('guncelleme','KasaFarki','',yeniGunler.length+' gun sube raporundan aktarildi ('+yazilan+' kayit)'); }catch(e){} }
-    return yazilan;
-  } finally { cdAktarmaCalisiyor=false; }
-}
 async function cashFarkCiz(){
   cashFarkKur();
   if($('cfTarih') && !$('cfTarih').value) $('cfTarih').value=bugun();
   await personelleriYukle();
-  var aktarilan=0;
-  try{ aktarilan=await cashDiffRapordanAktar(); }catch(e){ console.error('rapor aktarim',e); }
   await cashFarkRaporCiz();     // ONCE ay ozeti (cfAylikNet dolar) + gunluk liste
   await cashFarkGridYukle();    // sonra grid (aylik toplamlari gosterir)
-  if(aktarilan){ var h=$('cfHata'); if(h){ h.style.color='var(--yesil)';
-    h.textContent='Sube raporundan '+aktarilan+' kasa farki kaydi aktarildi.';
-    setTimeout(function(){ if(h){h.style.color='';h.textContent='';} },5000); } }
 }
 // Belli bir donemin cashDiff kayitlarini ceker (rapor + karne kolonu ortak kullanir).
 async function cashDiffKayitlariGetir(){
@@ -2960,11 +2840,15 @@ async function cashFarkGridKaydet(){
   }catch(err){ console.error(err); if(h){h.style.color='var(--kirmizi)';h.textContent='Kaydedilemedi. Yetki veya kural sorunu olabilir.';} }
   finally{ if(btn)btn.disabled=false; }
 }
+// ANA KASA gercek bir personel degil; kisi bazli ozette sube adiyla ayrilir (subeler birlesmesin)
+function cfKisiEtiket(k){ var ad=(k&&k.personel)||'(personel yok)';
+  if(String(ad).toUpperCase()==='ANA KASA'){ var sb=String((k&&k.sube)||'').split('(')[0].trim(); return sb?('ANA KASA - '+sb):'ANA KASA'; }
+  return ad; }
 function cashFarkRender(el,kayitlar){
   const donem=aktifTum?'Tum zamanlar':('Ay: '+aktifAy);
   if(!kayitlar.length){ el.innerHTML='<p class="mini-not">'+esc(donem)+'</p><p class="bos-satir">Bu donemde kasa farki kaydi yok.</p>'; return; }
   const map={}; let gEksik=0,gFazla=0;
-  kayitlar.forEach(function(k){ const ad=k.personel||'(personel yok)'; if(!map[ad])map[ad]={ad:ad,kayit:0,eksik:0,fazla:0,net:0};
+  kayitlar.forEach(function(k){ const ad=cfKisiEtiket(k); if(!map[ad])map[ad]={ad:ad,kayit:0,eksik:0,fazla:0,net:0};
     const f=Number(k.fark)||0; map[ad].kayit++; map[ad].net+=f;
     if(f<0){ map[ad].eksik+=(-f); gEksik+=(-f); } else if(f>0){ map[ad].fazla+=f; gFazla+=f; } });
   const satirlar=Object.keys(map).map(function(a){return map[a];}).sort(function(a,b){return a.net-b.net;});   // en cok EKSIK ustte
@@ -2990,7 +2874,7 @@ function cashFarkRender(el,kayitlar){
        '<span class="cf-gun-net">'+(eks?'<span class="zarar-rozet">-'+tl(eks)+'</span>':'')+(faz?'<span class="geri-rozet">+'+tl(faz)+'</span>':'')+' &nbsp;net '+cfIsaret(net)+'</span></div>'+
        '<div class="cf-gun-govde"><table class="ozet-tablo"><tbody>';
     list.slice().sort(function(a,b){return String(a.personel||'').localeCompare(String(b.personel||''),'tr');}).forEach(function(k){
-      h+='<tr><td class="kisi">'+esc(k.personel||'')+'</td><td class="sag">'+cfIsaret(k.fark)+'</td><td>'+esc(k.note||'')+'</td>'+
+      h+='<tr><td class="kisi">'+esc(cfKisiEtiket(k))+'</td><td class="sag">'+cfIsaret(k.fark)+'</td><td>'+esc(k.note||'')+'</td>'+
         '<td class="sag"><a href="javascript:void(0)" class="cf-sil" onclick="event.stopPropagation();cashFarkSil(\''+esc(k.id)+'\')" title="Sil" style="color:var(--kirmizi);font-weight:700;text-decoration:none">&times;</a></td></tr>';
     });
     h+='</tbody></table></div></div>';
