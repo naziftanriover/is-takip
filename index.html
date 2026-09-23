@@ -4147,19 +4147,8 @@ function sr2Or(M,sb){
 function sr2Shop(d,M,sb){
   var h = M ? sr2KanalMut(M,sb) : sr2KanalEski(d,sb);
   h += sr2Or(M,sb);
-  var uy=((d.kanal||{}).uyusmazlik)||[];
-  if(!uy.length){ var kn=((d.kanal||{}).subeler)||{};
-    Object.keys(kn).forEach(function(s){ ((kn[s]||{}).uyusmaz||[]).forEach(function(x){ var y={}; for(var q in x)y[q]=x[q]; y.sube=y.sube||s; uy.push(y); }); }); }
-  uy=uy.filter(function(x){return sr2Var(sb,x.sube);});
-  if(uy.length){
-    h+='<p class="sr2-sm" style="margin:14px 0 6px"><b>Yazim uyusmazligi</b> &mdash; hesap numarasinin hane sayisi ile aciklamaya yazilan etiket farkli ('+uy.length+'):</p>'+
-      sr2Tab('<th>Sube</th><th>Saat</th><th>Yon</th><th class="n">Tutar</th><th>Personel</th><th>Yazilan</th><th>Numaraya gore</th><th>Aciklama</th>',
-        uy.map(function(x){
-          return '<tr><td>'+srEsc(x.sube||'')+'</td><td class="sr2-mu">'+srEsc(x.saat||'')+'</td>'+
-            '<td><span class="sr2-p '+(/To/i.test(String(x.tip||''))?'ok':'bad')+'">'+(/To/i.test(String(x.tip||''))?'IN':'OUT')+'</span></td>'+
-            '<td class="n">'+sr2N(x.tutar)+'</td><td>'+srEsc(x.personel||'-')+'</td><td>'+srEsc(x.hesap||x.yazilan||'')+'</td>'+
-            '<td><b>'+srEsc(x.numaraya||'')+'</b></td><td class="sr2-sm">'+srEsc(x.aciklama||'')+'</td></tr>'; }).join(''));
-  }
+  /* Yazim uyusmazligi tablosu 23 Eylul'de kaldirildi — Nazif: el aliskanligi,
+     sonucu etkilemiyor, raporlanmasi gereksiz. */
   var har='',n=0;
   (((d.denetim||{}).subeler)||[]).forEach(function(sec){
     if(!sr2Var(sb,sec.sube)) return;
