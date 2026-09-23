@@ -3794,12 +3794,32 @@ async function srGoster(gun){
 }
 
 /* ============================================================
-   SUBE RAPORU v2 — sube sekmeli, bolum sirali, okunakli tablolar
-   Bolum sirasi: 1 Betty<->BASCOM  2 Sanallar  3 Shop In/Out
-                 4 Adj PO  5 Adj Stake  6 Mudur In/Out  7 Yorumlar
+   SUBE RAPORU v3 — sube sekmeli, TAM bolumlu
+   Bolum sirasi:
+     (ust) Gun ozeti
+     1 Ciro ve kaynak kirilimi
+     2 Betty <-> BASCOM mutabakati
+     3 Sanallar dogru mu basildi
+     4 Shop in / out
+     5 Odeme duzeltmeleri (Adj PO)
+     6 Bahis duzeltmeleri (Adj Stake)
+     7 Mudur in / out (to / from manager)
+     8 Kasa farklari (kasiyer bazinda)
+     9 Yorumlar
+    10 Seriler, kurus ve yontem
+   Eski gunlerde mutabakat yoktur; o bolumler eski alanlardan cizilir,
+   veri yoksa "o gun kaydedilmemis" yazilir — bolum asla silinmez.
    ============================================================ */
 var SR2_SUBE=['ALSANCAK','İTİMAT','KASGAR','ZEYTİNLİK'];
 var sr2Aktif='TUMU';
+function sr2Ad(x){ return String(x==null?'':x).replace(/İ/g,'I').replace(/ı/g,'i').replace(/Ş/g,'S')
+  .replace(/Ğ/g,'G').replace(/Ö/g,'O').replace(/Ü/g,'U').replace(/Ç/g,'C').toUpperCase(); }
+function sr2Esit(a,b){ return sr2Ad(a)===sr2Ad(b); }
+function sr2Var(sb,ad){ return sb==='TUMU'||sr2Esit(sb,ad); }
+function sr2Liste(sb){ return sb==='TUMU'?SR2_SUBE.slice():[sb]; }
+function sr2Bul(o,sb){ if(!o) return null; if(o[sb]) return o[sb];
+  var k=Object.keys(o); for(var i=0;i<k.length;i++){ if(sr2Esit(k[i],sb)) return o[k[i]]; } return null; }
+function sr2Yok(m){ return '<div class="sr2-bos">'+m+'</div>'; }
 function sr2Style(){
   if(document.getElementById('sr2-style')) return;
   var st=document.createElement('style'); st.id='sr2-style';
@@ -3875,39 +3895,89 @@ function sr2Tab(bas,satir,foot){
 }
 
 /* ---------- 1. Betty <-> BASCOM mutabakati ---------- */
+/* ---------- 1. Ciro ve kaynak kirilimi ---------- */
+function sr2CiroEski(a,sb){
+  var K=a.kaynaklar||{}, F=a.futbol||{}, liste=sr2Liste(sb);
+  var rows='',T={s:0,p:0,t:0};
+  liste.forEach(function(sb2){
+    var k=sr2Bul(K,sb2)||{}, f=sr2Bul(F,sb2)||{}, st=0,po=0,tk=0;
+    Object.keys(k).forEach(function(q){ st+=k[q].stake||0; po+=k[q].po||0; tk+=k[q].ticket||0; });
+    st+=f.stake||0; po+=f.po||0; tk+=f.ticket||0;
+    T.s+=st;T.p+=po;T.t+=tk;
+    rows+='<tr><td><b>'+srEsc(sb2)+'</b></td><td class="n">'+sr2N(st)+'</td><td class="n">'+sr2N(po)+
+      '</td><td class="n">'+sr2Sgn(st-po)+'</td><td class="n sr2-mu">'+srAdet(tk)+'</td></tr>';
+  });
+  return sr2Tab('<th>Sube</th><th class="n">Bahis</th><th class="n">Odeme</th><th class="n">Kar / Zarar</th><th class="n">Bilet</th>',rows,
+    liste.length>1?('<tr><td>TOPLAM</td><td class="n">'+sr2N(T.s)+'</td><td class="n">'+sr2N(T.p)+'</td><td class="n">'+
+      sr2Sgn(T.s-T.p)+'</td><td class="n">'+srAdet(T.t)+'</td></tr>'):'');
+}
+function sr2Ciro(d,sb){
+  var a=d.ara||{}, su=a.subeler||{}, kasa=(d.kasa||{}).subeler||{};
+  var liste=sr2Liste(sb).filter(function(s){return sr2Bul(su,s);});
+  if(!liste.length) return a.kaynaklar?sr2CiroEski(a,sb):sr2Yok('Bu gun icin ciro tablosu kaydedilmemis.');
+  var T={s:0,p:0,k:0,b:0,kf:0};
+  var rows=liste.map(function(s){
+    var u=sr2Bul(su,s)||{}, t=u.toplam||{}, k=sr2Bul(kasa,s)||{};
+    T.s+=t.stake||0;T.p+=t.payout||0;T.k+=t.kar||0;T.b+=t.bilet||0;T.kf+=k.tutar||0;
+    return '<tr><td><b>'+srEsc(s)+'</b></td><td class="n">'+sr2N(t.stake)+'</td><td class="n">'+sr2N(t.payout)+
+      '</td><td class="n">'+sr2Sgn(t.kar)+'</td><td class="n sr2-mu">'+srAdet(t.bilet)+'</td>'+
+      '<td class="n">'+(k.tutar==null?'<span class="sr2-mu">veri yok</span>':sr2Sgn(k.tutar))+'</td>'+
+      '<td>'+srEsc(k.kapatan||'-')+'</td><td class="sr2-mu">'+srEsc(k.saat||'')+'</td></tr>';
+  }).join('');
+  var foot=liste.length>1?('<tr><td>TOPLAM</td><td class="n">'+sr2N(T.s)+'</td><td class="n">'+sr2N(T.p)+'</td><td class="n">'+
+    sr2Sgn(T.k)+'</td><td class="n">'+srAdet(T.b)+'</td><td class="n">'+sr2Sgn(T.kf)+'</td><td colspan="2"></td></tr>'):'';
+  var h=sr2Tab('<th>Sube</th><th class="n">Bahis</th><th class="n">Odeme</th><th class="n">Kar / Zarar</th>'+
+    '<th class="n">Bilet</th><th class="n">Kasa farki</th><th>Kapatan</th><th>Saat</th>',rows,foot);
+  var kay=a.kaynaklar_ad||['Betty','Futbol','Kiron','Golden','Global'];
+  var kr=liste.map(function(s){
+    var u=sr2Bul(su,s)||{}, kk=u.kaynak||{}, ham=u.bettyHam||{};
+    return '<tr><td><b>'+srEsc(s)+'</b></td>'+kay.map(function(q){ var v=kk[q]||{};
+      return '<td class="n"><b>'+sr2N(v.stake)+'</b><br><span class="sr2-sm sr2-mu">'+sr2N(v.payout)+'</span>'+
+        '<br><span class="sr2-sm sr2-mu">'+srAdet(v.bilet)+' bilet</span></td>';
+    }).join('')+'<td class="n"><b>'+sr2N(ham.stake)+'</b><br><span class="sr2-sm sr2-mu">'+sr2N(ham.payout)+
+      '</span><br><span class="sr2-sm sr2-mu">'+srAdet(ham.bilet)+' bilet</span></td></tr>';
+  }).join('');
+  h+='<p class="sr2-sm sr2-mu" style="margin:14px 0 6px">Kaynak kirilimi &mdash; her hucrede sirasiyla <b>bahis</b> &middot; odeme &middot; bilet. '+
+     'Betty sutunundan sanal ve futbol dusulmustur; bes sutunun toplami Betty ham toplamina esittir.</p>';
+  h+=sr2Tab('<th>Sube</th>'+kay.map(function(q){return '<th class="n">'+srEsc(q)+'</th>';}).join('')+'<th class="n">Betty ham</th>',kr);
+  return h;
+}
+/* ---------- 2. Betty <-> BASCOM mutabakati ---------- */
 function sr2Mutabakat(M,sb){
-  if(!M) return '<div class="sr2-bos">Bu gun icin BASCOM mutabakati yok. Kapanis sistemi 23 Eylulden itibaren denetime dahil edildi.</div>';
+  if(!M) return sr2Yok('Bu gun icin BASCOM mutabakati yok &mdash; kapanis sistemi 23 Eylulden itibaren denetime dahil edildi.');
   var rows='';
   function sat(ad,bet,bas,dur,not){
     return '<tr><td>'+srEsc(ad)+'</td><td class="n">'+sr2N(bet)+'</td><td class="n">'+sr2N(bas)+'</td>'+
       '<td class="n">'+(Math.abs((bet||0)-(bas||0))<0.005?'<span class="sr2-mu">0,00</span>':sr2Sgn((bet||0)-(bas||0)))+'</td>'+
       '<td>'+sr2Pill(dur)+'</td><td class="sr2-sm sr2-mu">'+srEsc(not||'')+'</td></tr>';
   }
-  (sb==='TUMU'?SR2_SUBE:[sb]).forEach(function(s){
-    var u=M.subeler&&M.subeler[s]; if(!u) return; var o=u.ozet;
+  var bulundu=false;
+  sr2Liste(sb).forEach(function(s){
+    var u=sr2Bul(M.subeler,s); if(!u) return; var o=u.ozet||{}; bulundu=true;
     if(sb==='TUMU') rows+='<tr class="grp"><td colspan="6">'+srEsc(s)+' &middot; kapatan '+srEsc(o.kapatan||'-')+'</td></tr>';
-    rows+=sat('Bahis (ciro)',o.bahisBetty,o.bahisBascom,o.bahisDurum,'');
-    rows+=sat('Odeme',o.odemeBetty,o.odemeBascom,o.odemeDurum,'');
+    rows+=sat('Bahis (ciro)',o.bahisBetty,o.bahisBascom,o.bahisDurum,'ham stake + stake adj up &minus; down');
+    rows+=sat('Odeme',o.odemeBetty,o.odemeBascom,o.odemeDurum,'ham payout + PO adj up &minus; down');
     rows+=sat('Kasa farki',o.kasaBetty,o.kasaBascom,o.kasaDurum,'Betty 88/89 ile BASCOM cash diff ayni olmali');
     rows+='<tr><td>Float zinciri</td><td class="n">'+sr2N(o.oncekiEndFloat)+'</td><td class="n">'+sr2N(o.startFloat)+'</td>'+
-      '<td class="n">'+(o.floatDurum==='ok'?'<span class="sr2-mu">0,00</span>':sr2Sgn(o.startFloat-o.oncekiEndFloat))+'</td>'+
-      '<td>'+sr2Pill(o.floatDurum)+'</td><td class="sr2-sm sr2-mu">dun kapanis &harr; bugun acilis</td></tr>';
+      '<td class="n">'+(o.floatDurum==='ok'?'<span class="sr2-mu">0,00</span>':sr2Sgn((o.startFloat||0)-(o.oncekiEndFloat||0)))+'</td>'+
+      '<td>'+sr2Pill(o.floatDurum)+'</td><td class="sr2-sm sr2-mu">dun kapanis &rarr; bugun acilis</td></tr>';
     if(o.voidBetty||o.voidBascom) rows+=sat('Void',o.voidBetty,o.voidBascom,Math.abs((o.voidBetty||0)-(o.voidBascom||0))<0.02?'ok':'fark','');
     if(o.orToplam) rows+='<tr><td>OR Ticket</td><td class="n sr2-mu">-</td><td class="n">'+sr2N(o.orToplam)+'</td><td class="n sr2-mu">-</td>'+
-      '<td><span class="sr2-p wrn">INCELE</span></td><td class="sr2-sm sr2-mu">ciroyu azaltir &middot; Bettyde shop in/out karsiligi olmali</td></tr>';
-    if(o.plusPO||o.minusPO) rows+='<tr><td>Sube disi odeme</td><td class="n sr2-mu">-</td><td class="n">'+
-      (o.plusPO?('+'+sr2N(o.plusPO)):'')+(o.minusPO?('&minus;'+sr2N(o.minusPO)):'')+'</td><td class="n sr2-mu">-</td>'+
-      '<td><span class="sr2-p gri">BILGI</span></td><td class="sr2-sm sr2-mu">'+(o.plusPO?'baska sube icin odedik':'baska sube bizim icin odedi')+'</td></tr>';
+      '<td><span class="sr2-p wrn">INCELE</span></td><td class="sr2-sm sr2-mu">editlenen bilet duzeltmesi &middot; eslesme 4. bolumde</td></tr>';
+    if(o.plusPO) rows+='<tr><td>+ PO</td><td class="n sr2-mu">-</td><td class="n">'+sr2N(o.plusPO)+'</td><td class="n sr2-mu">-</td>'+
+      '<td><span class="sr2-p gri">BILGI</span></td><td class="sr2-sm sr2-mu">baska sube icin odedik</td></tr>';
+    if(o.minusPO) rows+='<tr><td>&minus; PO</td><td class="n sr2-mu">-</td><td class="n">'+sr2N(o.minusPO)+'</td><td class="n sr2-mu">-</td>'+
+      '<td><span class="sr2-p gri">BILGI</span></td><td class="sr2-sm sr2-mu">baska sube bizim icin odedi</td></tr>';
   });
+  if(!bulundu) return sr2Yok('Bu sube icin mutabakat kaydi yok.');
   return sr2Tab('<th>Kalem</th><th class="n">Betty</th><th class="n">BASCOM</th><th class="n">Fark</th><th>Durum</th><th>Not</th>',rows);
 }
 
-/* ---------- 2. Sanal girisleri ---------- */
-function sr2Sanal(M,sb){
-  if(!M) return '<div class="sr2-bos">Bu gun icin ayrintili sanal mutabakati yok.</div>';
-  var rows='';
-  (sb==='TUMU'?SR2_SUBE:[sb]).forEach(function(s){
-    var u=M.subeler&&M.subeler[s]; if(!u) return;
+/* ---------- 3. Sanallar dogru mu basildi ---------- */
+function sr2SanalMut(M,sb){
+  var rows='',bulundu=false;
+  sr2Liste(sb).forEach(function(s){
+    var u=sr2Bul(M.subeler,s); if(!u||!(u.sanal||[]).length) return; bulundu=true;
     if(sb==='TUMU') rows+='<tr class="grp"><td colspan="9">'+srEsc(s)+'</td></tr>';
     (u.sanal||[]).forEach(function(x){
       var bos=x.bettyDurum==='bos';
@@ -3916,153 +3986,435 @@ function sr2Sanal(M,sb){
         '<td class="n sr2-mu">'+srAdet(x.panelBilet)+'</td>'+
         '<td class="n">'+sr2N(x.bettyStake)+'</td><td class="n">'+sr2N(x.bettyPo)+'</td>'+
         '<td class="n">'+sr2N(x.bascomStake)+'</td><td class="n">'+sr2N(x.bascomPo)+'</td>'+
-        '<td>'+sr2Pill(x.bettyDurum)+(x.bascomDurum!==x.bettyDurum?' '+sr2Pill(x.bascomDurum):'')+
+        '<td>'+sr2Pill(x.bettyDurum)+(x.bascomDurum&&x.bascomDurum!==x.bettyDurum?' '+sr2Pill(x.bascomDurum):'')+
         (x.bettyDurum==='fark'?'<div class="sr2-sm sr2-neg">Betty '+sr2Sgn(x.fark)+'</div>':'')+'</td></tr>';
     });
   });
-  return sr2Tab('<th>Kanal</th><th class="n">Panel ciro</th><th class="n">Panel odeme</th><th class="n">Bilet</th>'+
+  if(!bulundu) return '';
+  return '<p class="sr2-sm sr2-mu" style="margin:14px 0 6px">Panel &rarr; Betty &rarr; BASCOM ucgeni &mdash; her kanal icin ayni rakam uc yerde de ayni olmali:</p>'+
+    sr2Tab('<th>Kanal</th><th class="n">Panel ciro</th><th class="n">Panel odeme</th><th class="n">Bilet</th>'+
     '<th class="n">Betty ciro</th><th class="n">Betty odeme</th><th class="n">BASCOM ciro</th><th class="n">BASCOM odeme</th><th>Durum</th>',rows);
 }
-
-/* ---------- 3. Shop in / out (kanal) ---------- */
-function sr2Kanal(M,sb){
-  if(!M) return '<div class="sr2-bos">Bu gun icin kanal mutabakati yok.</div>';
-  var rows='',har='';
-  (sb==='TUMU'?SR2_SUBE:[sb]).forEach(function(s){
-    var u=M.subeler&&M.subeler[s]; if(!u) return;
+function sr2TermPers(d){
+  var out={};
+  function ekle(sb,term,ad,saat){
+    if(!term||!ad) return; var no=parseInt(String(term).replace(/\D/g,''),10); if(isNaN(no)) return;
+    var g=out[sr2Ad(sb)]||(out[sr2Ad(sb)]={}), t=g[no]||(g[no]={}), r=t[ad];
+    if(!r) t[ad]=[saat||'',saat||'']; else { if(saat&&saat<r[0])r[0]=saat; if(saat&&saat>r[1])r[1]=saat; }
+  }
+  (((d.denetim||{}).subeler)||[]).forEach(function(sec){ (sec.manager||[]).forEach(function(m){ ekle(sec.sube,m.terminal,m.personel,m.saat); }); });
+  var tm=((d.kasa||{}).terminal)||{};
+  Object.keys(tm).forEach(function(sb){ (tm[sb]||[]).forEach(function(r){ ekle(sb,r.terminal,r.personel,r.saat); }); });
+  ((d.kasa||{}).sayim||[]).forEach(function(r){ ekle(r.sube,r.terminal,r.personel,r.saat); });
+  return out;
+}
+function sr2SanalTerm(d,sb){
+  var sp=((d.ara||{}).sanalPersonel); if(!sp) return '';
+  var pers=sr2TermPers(d), KAY=['GOLDEN','GLOBAL','KIRON','FUTBOL'], h='', varMi=false;
+  sr2Liste(sb).forEach(function(s){
+    var term={};
+    KAY.forEach(function(kn){ ((sr2Bul(sp[kn]||{},s))||[]).forEach(function(r){
+      var m=String(r.terminal||'').match(/(\d+)\s*$/); if(!m) return;
+      (term[+m[1]]||(term[+m[1]]={}))[kn]=[r.stake||0,r.po||0,r.ticket||0];
+    });});
+    var nolar=Object.keys(term).map(Number).sort(function(a,b){return a-b;});
+    if(!nolar.length) return; varMi=true;
+    var rows='',tp={GOLDEN:[0,0,0],GLOBAL:[0,0,0],KIRON:[0,0,0],FUTBOL:[0,0,0]};
+    nolar.forEach(function(no){
+      var g=(pers[sr2Ad(s)]||{})[no];
+      var ad=g?Object.keys(g).sort(function(a,b){return g[a][0]<g[b][0]?-1:1;}).map(function(x){
+        return '<b>'+srEsc(x)+'</b> <span class="sr2-mu">'+srEsc(g[x][0]===g[x][1]?g[x][0]:(g[x][0]+'-'+g[x][1]))+'</span>'; }).join('<br>'):'<span class="sr2-mu">&mdash;</span>';
+      rows+='<tr><td><b>t'+no+'</b></td><td class="sr2-sm">'+ad+'</td>';
+      KAY.forEach(function(kn){ var v=term[no][kn];
+        if(v){ tp[kn][0]+=v[0];tp[kn][1]+=v[1];tp[kn][2]+=v[2];
+          rows+='<td class="n"><b>'+sr2N(v[0])+'</b><br><span class="sr2-sm sr2-mu">'+sr2N(v[1])+'</span></td>'; }
+        else rows+='<td class="n sr2-mu">&mdash;</td>'; });
+      rows+='</tr>';
+    });
+    h+=(sb==='TUMU'?'<p class="sr2-sm" style="margin:12px 0 5px"><b>'+srEsc(s)+'</b></p>':'')+
+      sr2Tab('<th>Term.</th><th>Personel</th>'+KAY.map(function(k){return '<th class="n">'+k.charAt(0)+k.slice(1).toLowerCase()+'</th>';}).join(''),rows,
+      '<tr><td>TOPLAM</td><td></td>'+KAY.map(function(kn){return '<td class="n">'+sr2N(tp[kn][0])+'<br><span class="sr2-sm">'+sr2N(tp[kn][1])+'</span></td>';}).join('')+'</tr>');
+  });
+  if(!varMi) return '';
+  return '<p class="sr2-sm sr2-mu" style="margin:14px 0 6px">Terminal bazinda sanal satis &mdash; ustte bahis, altta odeme. '+
+    'Personel adlari Betty&rsquo;den: o gun o terminalde kasa hareketi veya terminal kapanisi yapan kisi.</p>'+h;
+}
+function sr2SanalBolum(d,M,sb){
+  var h='', g=d.geceGiris||{};
+  var gs=(g.satirlar||[]).filter(function(r){return sr2Var(sb,r.sube);});
+  if(gs.length){
+    var hat=gs.filter(function(r){return /HATAL/i.test(String(r.durum||''));}).length;
+    h+='<p class="sr2-sm sr2-mu" style="margin:0 0 6px">Gece kapanisinda mudur panellere bakip bahis ve odemeyi Betty&rsquo;ye elle girer. '+
+       '<b>'+(gs.length-hat)+' / '+gs.length+' giris dogru.</b>'+(hat?' <b class="sr2-neg">'+hat+' HATALI.</b>':'')+'</p>';
+    h+=sr2Tab('<th>Sube</th><th>Kanal</th><th>Personel</th><th>Saat</th><th>Bilet</th><th class="n">Betty&rsquo;ye girilen</th>'+
+      '<th class="n">Panel (net)</th><th class="n">Fark</th><th>Durum</th>',
+      gs.map(function(r){ var ok=!/HATAL/i.test(String(r.durum||''));
+        return '<tr><td><b>'+srEsc(r.sube)+'</b></td><td><b>'+srEsc(r.kanal)+'</b></td><td>'+srEsc(r.personel||'-')+'</td>'+
+          '<td class="sr2-mu">'+srEsc(r.saat||'')+'</td><td class="sr2-mu">'+srEsc(r.ticket||'-')+'</td>'+
+          '<td class="n"><b>'+sr2N(r.girilenStake)+'</b><br><span class="sr2-sm sr2-mu">'+sr2N(r.girilenPayout)+'</span></td>'+
+          '<td class="n"><b>'+sr2N(r.panelStake)+'</b><br><span class="sr2-sm sr2-mu">'+sr2N(r.panelPayout)+'</span></td>'+
+          '<td class="n">'+(r.fark?sr2Sgn(r.fark):'<span class="sr2-mu">0,00</span>')+'</td>'+
+          '<td>'+(ok?'<span class="sr2-p ok">DOGRU</span>':'<span class="sr2-p bad">HATALI</span>')+
+          (r['not']?'<div class="sr2-sm sr2-mu">'+srEsc(r['not'])+'</div>':'')+'</td></tr>'; }).join(''));
+  } else {
+    h+=sr2Yok('Gece giris kontrolu bu gun icin kaydedilmemis.');
+  }
+  if(M) h+=sr2SanalMut(M,sb);
+  h+=sr2SanalTerm(d,sb);
+  h+='<p class="sr2-sm sr2-mu" style="margin:10px 0 0"><b>Not:</b> panellerde iptal edilen biletler dusulur, Betty&rsquo;ye NET rakam girilir. '+
+     'Futbol odemesi tek bilete sigmazsa ikinci bilet acilir ve ikincinin bahsi 0,01 TL olur &mdash; bu normaldir, bulgu degildir.</p>';
+  return h;
+}
+/* ---------- 4. Shop in / out ---------- */
+function sr2KanalEski(d,sb){
+  var kn=((d.kanal||{}).subeler)||{}, rows='', bulundu=false;
+  sr2Liste(sb).forEach(function(s){
+    var k0=sr2Bul(kn,s); if(!k0) return; var kk=k0.kanal||k0; bulundu=true;
     if(sb==='TUMU') rows+='<tr class="grp"><td colspan="6">'+srEsc(s)+'</td></tr>';
+    Object.keys(kk).forEach(function(ad){ var v=kk[ad]||{};
+      if(typeof v!=='object'||(v.adetIn===undefined&&v.adetOut===undefined)) return;
+      rows+='<tr><td><b>'+srEsc(ad)+'</b></td><td class="n">'+srAdet(v.adetIn)+'</td><td class="n">'+sr2N(v.tutarIn)+
+        '</td><td class="n">'+srAdet(v.adetOut)+'</td><td class="n">'+sr2N(v.tutarOut)+
+        '</td><td class="n">'+sr2Sgn((v.tutarIn||0)-(v.tutarOut||0))+'</td></tr>';
+    });
+  });
+  if(!bulundu) return sr2Yok('Bu gun icin kanal ozeti kaydedilmemis.');
+  return '<p class="sr2-sm sr2-mu" style="margin:0 0 6px">Kanal ozeti &mdash; aciklamadaki hesap numarasina gore (6 hane ONLINE, 8-10 hane 365). '+
+    'BASCOM karsilastirmasi bu gun icin yapilmamis.</p>'+
+    sr2Tab('<th>Kanal</th><th class="n">IN adet</th><th class="n">IN tutar</th><th class="n">OUT adet</th><th class="n">OUT tutar</th><th class="n">Net</th>',rows);
+}
+function sr2KanalMut(M,sb){
+  var rows='',har='',bulundu=false;
+  sr2Liste(sb).forEach(function(s){
+    var u=sr2Bul(M.subeler,s); if(!u) return; bulundu=true;
+    if(sb==='TUMU'&&(u.kanal||[]).length) rows+='<tr class="grp"><td colspan="6">'+srEsc(s)+'</td></tr>';
     (u.kanal||[]).forEach(function(x){
-      rows+='<tr><td><span class="sr2-p '+(x.yon==='IN'?'ok':'bad')+'">'+x.yon+'</span></td>'+
+      rows+='<tr><td><span class="sr2-p '+(x.yon==='IN'?'ok':'bad')+'">'+srEsc(x.yon)+'</span></td>'+
         '<td><b>'+srEsc(x.kanal)+'</b></td><td class="n">'+sr2N(x.betty)+'</td><td class="n">'+sr2N(x.bascom)+'</td>'+
         '<td class="n">'+(x.durum==='ok'?'<span class="sr2-mu">0,00</span>':sr2Sgn(x.fark))+'</td><td>'+sr2Pill(x.durum)+'</td></tr>';
     });
     (u.kanalHaric||[]).forEach(function(x){
-      har+='<tr><td>'+(sb==='TUMU'?srEsc(s)+' &middot; ':'')+'<span class="sr2-p gri">'+x.yon+'</span></td><td>'+srEsc(x.kanal)+'</td>'+
+      har+='<tr><td>'+(sb==='TUMU'?srEsc(s)+' &middot; ':'')+'<span class="sr2-p gri">'+srEsc(x.yon)+'</span></td><td>'+srEsc(x.kanal)+'</td>'+
         '<td class="n">'+sr2N(x.tutar)+'</td><td class="n sr2-mu">'+srAdet(x.adet)+'</td></tr>';
     });
   });
-  var h=sr2Tab('<th>Yon</th><th>Kanal</th><th class="n">Betty</th><th class="n">BASCOM</th><th class="n">Fark</th><th>Durum</th>',rows);
-  if(har) h+='<p class="sr2-sm sr2-mu" style="margin:12px 0 5px">Kanal disi tutulanlar &mdash; kur farki, duzeltme ve sube disi odemeler BASCOMda ayri alanlarda durur:</p>'+
+  if(!bulundu) return sr2Yok('Bu sube icin kanal mutabakati yok.');
+  var h='<p class="sr2-sm sr2-mu" style="margin:0 0 6px">Betty&rsquo;deki shop in/out ile BASCOM&rsquo;a yazilan transfer satirlari kanal kanal karsilastirilir.</p>'+
+    sr2Tab('<th>Yon</th><th>Kanal</th><th class="n">Betty</th><th class="n">BASCOM</th><th class="n">Fark</th><th>Durum</th>',rows);
+  if(har) h+='<p class="sr2-sm sr2-mu" style="margin:14px 0 6px">Kanal disi tutulanlar &mdash; kur farki, duzeltme ve sube disi odemeler BASCOM&rsquo;da ayri alanlarda durur:</p>'+
     sr2Tab('<th>Yon</th><th>Tur</th><th class="n">Tutar</th><th class="n">Adet</th>',har);
   return h;
 }
-
-/* ---------- 4 + 5. Adjustment listeleri ---------- */
-function sr2Adj(M,sb,tip){
-  if(!M) return '<div class="sr2-bos">Bu gun icin ayrintili adjustment listesi yok.</div>';
-  var rows='',net=0,adet=0,kurus='';
-  (sb==='TUMU'?SR2_SUBE:[sb]).forEach(function(s){
-    var u=M.subeler&&M.subeler[s]; if(!u) return;
-    var L=(tip==='po'?u.adjPo:u.adjStake)||[];
-    var o=u.adjOzet||{};
-    net+= (tip==='po'? (o.poNet||0) : (o.stakeNet||0));
-    adet+=L.length;
-    if(L.length && sb==='TUMU') rows+='<tr class="grp"><td colspan="6">'+srEsc(s)+'</td></tr>';
-    L.sort(function(a,b){return a.saat<b.saat?-1:1;}).forEach(function(x){
-      rows+='<tr><td class="sr2-mu">'+srEsc(x.saat)+'</td>'+
-        '<td><span class="sr2-p '+(x.tur==='UP'?'bad':'ok')+'">'+(x.tur==='UP'?'UP':'DOWN')+'</span></td>'+
-        '<td class="sr2-mu">'+srEsc(x.ticket||'-')+'</td>'+
-        '<td class="n"><b>'+sr2N(x.tutar)+'</b></td>'+
-        '<td>'+srEsc(x.personel||'-')+'</td>'+
-        '<td class="sr2-sm '+(x.aciklama?'':'sr2-mu')+'">'+srEsc(x.aciklama||'(aciklama yok)')+'</td></tr>';
+var SR2_ORAD={horse:'At yarisi',dog:'Kopek yarisi',football:'Futbol (Betty)',liveFootball:'Solibet Futbol',
+  kiron:'Kiron',global:'GOLDEN (Virtustec)',inspired:'GLOBAL (globalrace)'};
+function sr2Or(M,sb){
+  if(!M) return '';
+  var rows='',fz='',varMi=false,nk=0;
+  sr2Liste(sb).forEach(function(s){
+    var u=sr2Bul(M.subeler,s); if(!u||!u.or) return; varMi=true;
+    var L=u.or.kayitlar||[];
+    if(L.length&&sb==='TUMU') rows+='<tr class="grp"><td colspan="7">'+srEsc(s)+'</td></tr>';
+    L.forEach(function(x){ nk++;
+      var b=x.betty;
+      rows+='<tr><td><b>'+srEsc(x.kategoriAd||SR2_ORAD[x.kategori]||x.kategori)+'</b></td>'+
+        '<td class="n"><b>'+(x.yon==='OUT'?'+':'&minus;')+sr2N(x.bascomTutar)+'</b></td>'+
+        '<td><span class="sr2-p '+(x.yon==='IN'?'ok':'bad')+'">SHOP '+srEsc(x.yon)+'</span></td>'+
+        '<td class="n">'+(b?sr2N(b.tutar):'<span class="sr2-mu">&mdash;</span>')+'</td>'+
+        '<td class="sr2-mu">'+(b?srEsc(b.saat)+' &middot; '+srEsc(b.personel||''):'&mdash;')+'</td>'+
+        '<td>'+(b&&b.ticket?'<b>'+srEsc(b.ticket)+'</b>':'<span class="sr2-mu">bilet no yok</span>')+
+        (b?'<div class="sr2-sm sr2-mu">'+srEsc(b.aciklama||'')+'</div>':'')+'</td>'+
+        '<td>'+(x.durum==='ok'?'<span class="sr2-p ok">KARSILIGI VAR</span>':
+               (x.durum==='fark'?'<span class="sr2-p bad">TUTAR / YON TUTMUYOR</span>':'<span class="sr2-p bad">BETTYDE KARSILIGI YOK</span>'))+'</td></tr>';
     });
-    if(tip==='stake' && (u.kurus||[]).length){
-      kurus+=(sb==='TUMU'?'<b>'+srEsc(s)+':</b> ':'')+u.kurus.map(function(k){return srEsc(k.personel)+' '+k.adet;}).join(' &middot; ')+'<br>';
+    (u.or.fazla||[]).forEach(function(x){
+      fz+='<tr><td>'+(sb==='TUMU'?srEsc(s):'')+'</td><td class="sr2-mu">'+srEsc(x.saat||'')+'</td>'+
+        '<td><span class="sr2-p '+(x.yon==='IN'?'ok':'bad')+'">SHOP '+srEsc(x.yon||'')+'</span></td>'+
+        '<td class="n"><b>'+sr2N(x.tutar)+'</b></td><td>'+srEsc(x.personel||'-')+'</td>'+
+        '<td class="sr2-sm">'+srEsc(x.aciklama||'')+'</td></tr>';
+    });
+  });
+  if(!varMi) return '';
+  var h='<p class="sr2-sm" style="margin:16px 0 6px"><b>OR ticket eslesmesi</b> &mdash; BASCOM&rsquo;a yazilan her OR kaydinin '+
+    'Betty&rsquo;de ayni tutarda shop in/out karsiligi olmali. Editlenen bilet <b>kuculdu</b> ise shop IN + OR eksi; '+
+    '<b>buyudu</b> ise shop OUT + OR arti.</p>';
+  h+=nk?sr2Tab('<th>Kategori</th><th class="n">BASCOM OR</th><th>Beklenen yon</th><th class="n">Betty tutar</th><th>Saat / personel</th><th>Bilet &middot; aciklama</th><th>Durum</th>',rows)
+      :sr2Yok('Bu gun OR ticket yazilmamis.');
+  if(fz) h+='<p class="sr2-sm" style="margin:12px 0 6px"><b>BASCOM&rsquo;da karsiligi olmayan duzeltmeler</b> &mdash; '+
+    'Betty&rsquo;de adjust/OR aciklamali shop hareketi var ama BASCOM OR bolumunde yok:</p>'+
+    sr2Tab('<th>Sube</th><th>Saat</th><th>Yon</th><th class="n">Tutar</th><th>Personel</th><th>Aciklama</th>',fz);
+  return h;
+}
+function sr2Shop(d,M,sb){
+  var h = M ? sr2KanalMut(M,sb) : sr2KanalEski(d,sb);
+  h += sr2Or(M,sb);
+  var uy=((d.kanal||{}).uyusmazlik)||[];
+  if(!uy.length){ var kn=((d.kanal||{}).subeler)||{};
+    Object.keys(kn).forEach(function(s){ ((kn[s]||{}).uyusmaz||[]).forEach(function(x){ var y={}; for(var q in x)y[q]=x[q]; y.sube=y.sube||s; uy.push(y); }); }); }
+  uy=uy.filter(function(x){return sr2Var(sb,x.sube);});
+  if(uy.length){
+    h+='<p class="sr2-sm" style="margin:14px 0 6px"><b>Yazim uyusmazligi</b> &mdash; hesap numarasinin hane sayisi ile aciklamaya yazilan etiket farkli ('+uy.length+'):</p>'+
+      sr2Tab('<th>Sube</th><th>Saat</th><th>Yon</th><th class="n">Tutar</th><th>Personel</th><th>Yazilan</th><th>Numaraya gore</th><th>Aciklama</th>',
+        uy.map(function(x){
+          return '<tr><td>'+srEsc(x.sube||'')+'</td><td class="sr2-mu">'+srEsc(x.saat||'')+'</td>'+
+            '<td><span class="sr2-p '+(/To/i.test(String(x.tip||''))?'ok':'bad')+'">'+(/To/i.test(String(x.tip||''))?'IN':'OUT')+'</span></td>'+
+            '<td class="n">'+sr2N(x.tutar)+'</td><td>'+srEsc(x.personel||'-')+'</td><td>'+srEsc(x.hesap||x.yazilan||'')+'</td>'+
+            '<td><b>'+srEsc(x.numaraya||'')+'</b></td><td class="sr2-sm">'+srEsc(x.aciklama||'')+'</td></tr>'; }).join(''));
+  }
+  var har='',n=0;
+  (((d.denetim||{}).subeler)||[]).forEach(function(sec){
+    if(!sr2Var(sb,sec.sube)) return;
+    var L=(sec.inout||[]).slice().sort(function(a,b){return String(a.saat)<String(b.saat)?-1:1;});
+    if(!L.length) return;
+    if(sb==='TUMU') har+='<tr class="grp"><td colspan="7">'+srEsc(sec.sube)+' &middot; IN '+sr2N((sec.ozet||{}).inTutar)+
+      ' ('+srAdet((sec.ozet||{}).inAdet)+') &middot; OUT '+sr2N((sec.ozet||{}).outTutar)+' ('+srAdet((sec.ozet||{}).outAdet)+')</td></tr>';
+    L.forEach(function(x){ n++;
+      var inn=/ToShop/i.test(String(x.tip||''));
+      har+='<tr><td class="sr2-mu">'+srEsc(x.saat||'')+'</td>'+
+        '<td><span class="sr2-p '+(inn?'ok':'bad')+'">'+(inn?'IN':'OUT')+'</span></td>'+
+        '<td>'+srEsc(x.kanal||'')+'</td><td class="sr2-mu">'+srEsc(x.ticket||'-')+'</td>'+
+        '<td class="n"><b>'+sr2N(x.tutar)+'</b></td><td>'+srEsc(x.personel||'-')+'</td>'+
+        '<td class="sr2-sm'+(x.aciklama?'':' sr2-mu')+'">'+srEsc(x.aciklama||'(aciklama yok)')+
+        (x['not']?' <span class="sr2-p wrn">'+srEsc(x['not'])+'</span>':'')+'</td></tr>'; });
+  });
+  h+='<p class="sr2-sm" style="margin:14px 0 6px"><b>Butun shop in / out hareketleri</b>'+(n?' ('+n+' kayit)':'')+':</p>';
+  h+=n?sr2Tab('<th>Saat</th><th>Yon</th><th>Kanal</th><th>Bilet</th><th class="n">Tutar</th><th>Personel</th><th>Aciklama</th>',har)
+      :sr2Yok('Bu gun icin hareket listesi kaydedilmemis.');
+  return h;
+}
+
+/* ---------- 5 + 6. Adjustment ---------- */
+function sr2Adj(d,M,sb,tip){
+  var rows='',net=0,adet=0,kurus='',kurusAdet=0;
+  sr2Liste(sb).forEach(function(s){
+    var L=[],o=null;
+    var u=M&&sr2Bul(M.subeler,s);
+    if(u){ L=((tip==='po'?u.adjPo:u.adjStake)||[]).slice(); o=u.adjOzet||{};
+      (u.kurus||[]).forEach(function(k){ kurusAdet+=k.adet||0; }); }
+    if(!L.length){
+      var sec=(((d.denetim||{}).subeler)||[]).filter(function(x){return sr2Esit(x.sube,s);})[0];
+      if(sec) L=((tip==='po'?sec.po:sec.stake)||[]).slice();
     }
-  });
-  var h=sr2Tab('<th>Saat</th><th>Yon</th><th>Bilet</th><th class="n">Tutar</th><th>Personel</th><th>Aciklama</th>',rows,
-    adet?'<tr><td colspan="3">Gun neti</td><td class="n">'+sr2Sgn(net)+'</td><td colspan="2" class="sr2-mu">'+adet+' kayit</td></tr>':'');
-  if(kurus) h+='<p class="sr2-sm sr2-mu" style="margin:12px 0 0">5 TL alti kurus duzeltmeleri (adet): '+kurus+'</p>';
-  return h;
-}
-
-/* ---------- 6. Mudur in / out ---------- */
-function sr2Mudur(M,sb){
-  if(!M) return '<div class="sr2-bos">Bu gun icin mudur in/out ozeti yok.</div>';
-  var ozet='',kars='';
-  (sb==='TUMU'?SR2_SUBE:[sb]).forEach(function(s){
-    var u=M.subeler&&M.subeler[s]; if(!u||!u.mudur) return; var m=u.mudur;
-    ozet+='<tr><td><b>'+srEsc(s)+'</b></td><td class="n">'+sr2N(m.inT)+'</td><td class="n">'+sr2N(m.outT)+'</td>'+
-      '<td class="n sr2-mu">'+m.nIn+' / '+m.nOut+'</td><td class="n">'+m.eslesen+'</td>'+
-      '<td>'+(m.sorunlu? '<span class="sr2-p bad">'+m.sorunlu+' KARSILIKSIZ</span>':'<span class="sr2-p ok">TAMAMI ESLESTI</span>')+'</td></tr>';
-    (m.karsiliksiz||[]).forEach(function(k){
-      kars+='<tr><td>'+srEsc(s)+'</td><td class="sr2-mu">'+srEsc(k.saat)+'</td>'+
-        '<td><span class="sr2-p '+(k.yon==='IN'?'ok':'bad')+'">'+k.yon+'</span></td>'+
-        '<td class="n"><b>'+sr2N(k.tutar)+'</b></td><td>'+srEsc(k.personel||'-')+'</td>'+
-        '<td class="sr2-sm">'+srEsc(k.aciklama||'(aciklama yok)')+'</td></tr>';
+    if(!L.length) return;
+    adet+=L.length;
+    if(sb==='TUMU') rows+='<tr class="grp"><td colspan="6">'+srEsc(s)+'</td></tr>';
+    L.sort(function(a,b){return String(a.saat)<String(b.saat)?-1:1;}).forEach(function(x){
+      var up=(x.tur==='UP')||/Up$/i.test(String(x.tip||''));
+      net+= up?(x.tutar||0):-(x.tutar||0);
+      rows+='<tr><td class="sr2-mu">'+srEsc(x.saat||'')+'</td>'+
+        '<td><span class="sr2-p '+(up?'bad':'ok')+'">'+(up?'UP':'DOWN')+'</span></td>'+
+        '<td class="sr2-mu">'+srEsc(x.ticket||'-')+'</td>'+
+        '<td class="n"><b>'+sr2N(x.tutar)+'</b></td><td>'+srEsc(x.personel||'-')+'</td>'+
+        '<td class="sr2-sm'+(x.aciklama?'':' sr2-mu')+'">'+srEsc(x.aciklama||'(aciklama yok)')+'</td></tr>';
     });
   });
-  var h=sr2Tab('<th>Sube</th><th class="n">To Manager (IN)</th><th class="n">From Manager (OUT)</th><th class="n">Adet in/out</th><th class="n">Eslesen</th><th>Durum</th>',ozet);
-  if(kars) h+='<p class="sr2-sm" style="margin:12px 0 5px"><b>Karsiliksiz kayitlar</b> &mdash; karsi tarafta esi yok, sorulmali:</p>'+
-    sr2Tab('<th>Sube</th><th>Saat</th><th>Yon</th><th class="n">Tutar</th><th>Personel</th><th>Aciklama</th>',kars);
+  if(M){ sr2Liste(sb).forEach(function(s){ var u=sr2Bul(M.subeler,s); if(!u||!(u.kurus||[]).length) return;
+    kurus+=(sb==='TUMU'?'<b>'+srEsc(s)+':</b> ':'')+u.kurus.map(function(k){return srEsc(k.personel)+' '+k.adet;}).join(' &middot; ')+'<br>'; }); }
+  var h;
+  if(adet){
+    h=sr2Tab('<th>Saat</th><th>Yon</th><th>Bilet</th><th class="n">Tutar</th><th>Personel</th><th>Aciklama</th>',rows,
+      '<tr><td colspan="3">Gun neti</td><td class="n">'+sr2Sgn(net)+'</td><td colspan="2" class="sr2-mu">'+adet+' kayit</td></tr>');
+  }else{
+    h=sr2Yok('5 TL ustu '+(tip==='po'?'odeme':'bahis')+' duzeltmesi yok.'+
+      (tip==='stake'&&kurusAdet?' Sadece '+kurusAdet+' adet kurus duzeltmesi var (asagida).':''));
+  }
+  if(kurus&&tip==='stake') h+='<p class="sr2-sm sr2-mu" style="margin:12px 0 0">5 TL alti kurus duzeltmeleri (adet): '+kurus+'</p>';
   return h;
 }
 
-/* ---------- 7. Yorumlar ---------- */
-var SR2_SEV={y:['YUKSEK','y'],o:['ORTA','o'],t:['TAKIP','t'],d:['TEYIT','d']};
+/* ---------- 7. Mudur in / out ---------- */
+function sr2Mudur(d,M,sb){
+  var ozet='',har='',nHar=0,eksikVeri=[];
+  sr2Liste(sb).forEach(function(s){
+    var u=M&&sr2Bul(M.subeler,s), m=u&&u.mudur;
+    var sec=(((d.denetim||{}).subeler)||[]).filter(function(x){return sr2Esit(x.sube,s);})[0];
+    var mo=(sec&&sec.managerOzet)||(m?{inT:m.inT,outT:m.outT,eslesen:m.eslesen,sorunlu:m.sorunlu}:null);
+    var L=(m&&m.hareketler&&m.hareketler.length)?m.hareketler:((sec&&sec.manager)||[]);
+    if(!mo&&!L.length) return;
+    var nIn=0,nOut=0,sorunlu=0;
+    L.forEach(function(x){ if(/CashIn/i.test(String(x.tip||''))||x.yon==='IN')nIn++; else nOut++;
+      if(x.durum&&x.durum!=='eslesti')sorunlu++; });
+    if(m){ nIn=m.nIn||nIn; nOut=m.nOut||nOut; }
+    if(mo&&mo.sorunlu!=null) sorunlu=mo.sorunlu;
+    ozet+='<tr><td><b>'+srEsc(s)+'</b></td><td class="n">'+sr2N(mo?mo.inT:0)+'</td><td class="n">'+sr2N(mo?mo.outT:0)+'</td>'+
+      '<td class="n sr2-mu">'+nIn+' / '+nOut+'</td><td class="n">'+(L.length?Math.round((L.length-sorunlu)/2):((mo&&mo.eslesen)||0))+'</td>'+
+      '<td>'+(sorunlu?'<span class="sr2-p bad">'+sorunlu+' KARSILIKSIZ</span>':'<span class="sr2-p ok">TAMAMI ESLESTI</span>')+'</td></tr>';
+    if(!L.length){ eksikVeri.push(s); return; }
+    var SRN=L.filter(function(x){
+      var es=(typeof x.es==='object'&&x.es)?x.es.personel:x.es;
+      if(x.durum==='fark') return true;
+      if(x.durum&&x.durum!=='eslesti') return true;
+      if(!es) return true;
+      return (x.gap||0)>=30;
+    });
+    if(!SRN.length) return;
+    if(sb==='TUMU') har+='<tr class="grp"><td colspan="7">'+srEsc(s)+'</td></tr>';
+    SRN.slice().sort(function(a,b){return String(a.saat)<String(b.saat)?-1:1;}).forEach(function(x){ nHar++;
+      var inn=/CashIn/i.test(String(x.tip||''))||x.yon==='IN';
+      var es=(typeof x.es==='object'&&x.es)?x.es.personel:x.es;
+      var esSaat=(typeof x.es==='object'&&x.es)?x.es.saat:'';
+      var dur;
+      if(x.durum==='fark'){ dur='<span class="sr2-p bad">TUTAR TUTMUYOR</span>'; }
+      else if(x.durum&&x.durum!=='eslesti'){ dur='<span class="sr2-p bad">KARSI TARAFTA KAYIT YOK</span>'; }
+      else if(!es){ dur='<span class="sr2-p bad">KARSI TARAFTA KAYIT YOK</span>'; }
+      else { dur='<span class="sr2-p wrn">'+x.gap+' DK GECIKMELI</span>'; }
+      har+='<tr><td class="sr2-mu">'+srEsc(x.saat||'')+'</td>'+
+        '<td><span class="sr2-p '+(inn?'ok':'bad')+'">'+(inn?'IN':'OUT')+'</span><div class="sr2-sm sr2-mu">'+(inn?'to manager':'from manager')+'</div></td>'+
+        '<td class="sr2-mu">t'+srEsc(String(x.terminal||'').replace(/\D/g,''))+'</td>'+
+        '<td><b>'+srEsc(x.personel||'-')+'</b></td>'+
+        '<td class="n"><b>'+sr2N(x.tutar)+'</b></td>'+
+        '<td>'+(es?('<b>'+srEsc(es)+'</b>'+(esSaat?' <span class="sr2-mu">'+srEsc(esSaat)+'</span>':'')):'<span class="sr2-mu">&mdash;</span>')+
+        '<div class="sr2-sm sr2-mu">'+srEsc(x.aciklama||'(aciklama yok)')+'</div></td>'+
+        '<td>'+dur+'</td></tr>';
+    });
+  });
+  if(!ozet) return sr2Yok('Bu gun icin mudur in/out kaydi yok.');
+  var h='<p class="sr2-sm sr2-mu" style="margin:0 0 6px">Mudur ile kasiyer arasindaki para hareketleri (Till1CashIn / Till1CashOut). '+
+    'Her OUT&rsquo;un karsisinda bir IN olmali; eslestirme tutar ve aciklamadaki isim ile yapilir. '+
+    'Karsiliksiz kayit ana kasayi etkilemez, ilgili kasiyerin kendi farkinda gorunur.</p>';
+  h+=sr2Tab('<th>Sube</th><th class="n">To manager (IN)</th><th class="n">From manager (OUT)</th><th class="n">Adet in/out</th><th class="n">Eslesen cift</th><th>Durum</th>',ozet);
+  if(nHar) h+='<p class="sr2-sm" style="margin:14px 0 6px"><b>Sorunlu kayitlar</b> &mdash; karsi tarafta esi yok, tutar tutmuyor veya 30 dk uzeri gecikmeli ('+nHar+'):</p>'+
+    sr2Tab('<th>Saat</th><th>Yon</th><th>Term.</th><th>Kim yapti</th><th class="n">Tutar</th><th>Karsi taraf</th><th>Durum</th>',har);
+  else h+='<p class="sr2-sm sr2-mu" style="margin:12px 0 0">Sorunlu kayit yok &mdash; her OUT&rsquo;un karsisinda esi var.</p>';
+  if(eksikVeri.length) h+='<p class="sr2-sm sr2-mu" style="margin:6px 0 0">'+srEsc(eksikVeri.join(', '))+
+    ' icin hareket listesi kaydedilmemis; sadece ozet rakamlar var.</p>';
+  return h;
+}
+/* ---------- 8. Kasa farklari (kasiyer bazinda) ---------- */
+function sr2Kasa(d,sb){
+  var k=d.kasa||{}, su=k.subeler||{}, liste=sr2Liste(sb);
+  if(!Object.keys(su).length&&!(k.sayim||[]).length) return sr2Yok('Bu gun icin kasa kapanis verisi kaydedilmemis.');
+  var ekObj=k.ek||{}, ekSube=false;
+  Object.keys(ekObj).forEach(function(q){ var v=ekObj[q]; if(v&&typeof v==='object'&&('unpaids' in v||'nakit' in v)) ekSube=true; });
+  var rows='',T={f:0,ks:0,ak:0},varMi=false,dip=false;
+  liste.forEach(function(s){
+    var o=sr2Bul(su,s); if(!o) return; varMi=true;
+    var kim=o.kapatan||((o.kayitlar||[]).map(function(r){return r.personel;}).join(', '));
+    var st=o.saat||((o.kayitlar||[]).map(function(r){return r.saat;}).join(', '));
+    T.f+=o.tutar||0; T.ks+=o.kasiyerToplam||0; T.ak+=o.anaKasa||0;
+    var isar='';
+    if(o.gecKapanis){ var dkk=o.gecikmeDk||0, sa=Math.floor(dkk/60), kl=dkk%60;
+      isar+='<div><span class="sr2-p bad">GEC KAPANIS</span> <span class="sr2-sm sr2-mu">son terminalden '+(sa?sa+' sa ':'')+kl+' dk sonra</span></div>'; }
+    if(o.duzeltme){ var dz=o.duzeltme;
+      isar+='<div><span class="sr2-p wrn">ONCEKI GUNUN DUZELTMESI</span> <span class="sr2-sm sr2-mu">'+
+        srEsc(String(dz.dunGun||'').slice(8,10)+'.'+String(dz.dunGun||'').slice(5,7))+' '+sr2N(dz.dun)+' &rarr; bugun '+sr2N(dz.bugun)+'</span></div>'; }
+    var ekv=sr2Bul(ekObj,s)||{};
+    var yz=(ekv.guvenilir===false&&ekv.unpaids!=null)?'*':'';
+    if(ekv.neden) dip=true;
+    rows+='<tr><td><b>'+srEsc(s)+'</b></td>'+
+      '<td class="n">'+(o.tutar==null?'<span class="sr2-mu">veri yok</span>':'<b>'+sr2Sgn(o.tutar)+'</b>')+'</td>'+
+      '<td class="n">'+(o.kasiyerToplam==null?'<span class="sr2-mu">&mdash;</span>':sr2Sgn(o.kasiyerToplam))+'</td>'+
+      '<td class="n">'+(o.anaKasa==null?'<span class="sr2-mu">&mdash;</span>':sr2Sgn(o.anaKasa))+'</td>'+
+      (ekSube?('<td class="n">'+(ekv.unpaids==null?'<span class="sr2-mu">veri yok</span>':sr2N(ekv.unpaids)+yz)+'</td>'+
+               '<td class="n">'+(ekv.nakit==null?'<span class="sr2-mu">veri yok</span>':sr2N(ekv.nakit)+yz)+'</td>'):'')+
+      '<td class="sr2-sm sr2-mu">'+srEsc(o.tur||'')+(o.anaTerminal?' &middot; '+srEsc(o.anaTerminal):'')+isar+'</td>'+
+      '<td>'+srEsc(kim||'-')+'</td><td class="sr2-mu">'+srEsc(st||'-')+'</td></tr>';
+  });
+  if(!varMi) return sr2Yok('Bu sube icin kasa kapanis kaydi yok.');
+  var h='<p class="sr2-sm sr2-mu" style="margin:0 0 6px">Sube farki = Betty 88 (Up) / 89 (Down) kapanis kaydi. '+
+    '<b>Ana kasa = sube farki &minus; kasiyerler toplami.</b>'+
+    (ekSube?' Unpaids (odenmemis kupon) ve Cash in shop (subede kalan nakit) kaynagi Cash-up ekranidir.':'')+'</p>'+
+    sr2Tab('<th>Sube</th><th class="n">Sube farki</th><th class="n">Kasiyerler toplami</th><th class="n">Ana kasa</th>'+
+      (ekSube?'<th class="n">Unpaids</th><th class="n">Cash in shop</th>':'')+
+      '<th>Betty islem turu</th><th>Kapatan</th><th>Saat</th>',rows,
+      liste.length>1?('<tr><td>TOPLAM</td><td class="n">'+sr2Sgn(T.f)+'</td><td class="n">'+sr2Sgn(T.ks)+'</td><td class="n">'+sr2Sgn(T.ak)+'</td>'+
+        (ekSube?'<td colspan="2"></td>':'')+'<td colspan="3"></td></tr>'):'');
+  if(dip){ var nd=[];
+    liste.forEach(function(s){ var e=sr2Bul(ekObj,s); if(e&&e.neden) nd.push(srEsc(s)+': '+srEsc(e.neden)); });
+    if(nd.length) h+='<p class="sr2-sm sr2-mu" style="margin:8px 0 0">'+nd.join('<br>')+'</p>'; }
+  var sy=(k.sayim||[]).filter(function(r){return sr2Var(sb,r.sube);});
+  h+='<p class="sr2-sm" style="margin:16px 0 6px"><b>Kim eksik, kim fazla verdi</b> &mdash; kasiyer bazinda sayim farki'+(sy.length?' ('+sy.length+' terminal kapanisi)':'')+':</p>';
+  if(sy.length){
+    h+=sr2Tab('<th>Personel</th><th>Sube</th><th>Term.</th><th>Saat</th><th class="n">Fark</th>',
+      sy.slice().sort(function(a,b){return Math.abs(b.fark||0)-Math.abs(a.fark||0);}).map(function(p){
+        var f=p.fark||0;
+        return '<tr><td><b>'+srEsc(p.personel)+'</b></td><td>'+srEsc(p.sube)+'</td><td class="sr2-mu">t'+
+          srEsc(String(p.terminal||'').replace(/\D/g,''))+'</td><td class="sr2-mu">'+srEsc(p.saat||'')+'</td>'+
+          '<td class="n"><b>'+sr2Sgn(f)+'</b></td></tr>'; }).join(''),
+      '<tr><td colspan="4">Kasiyerler toplami</td><td class="n">'+sr2Sgn(sy.reduce(function(p,x){return p+(x.fark||0);},0))+'</td></tr>');
+    h+='<p class="sr2-sm sr2-mu" style="margin:8px 0 0">Sayimda once nakit sayilir, personelin aldigi futbol ve sanal bahisler nakitten dusulur, '+
+       'kalan rakam Betty&rsquo;ye girilir. Yukaridaki fark sanal ve futbol dahil edilmis NET kasa farkidir. '+
+       'Vardiya degisiminde kasa sifirlanmaz, sadece fark alinir ve kasa devredilir.</p>';
+  } else h+=sr2Yok('Bu gun icin kasiyer bazinda sayim farki kaydedilmemis.');
+  var dv=(k.mudurDevir||[]).filter(function(r){return sr2Var(sb,r.sube);});
+  if(dv.length){
+    h+='<p class="sr2-sm" style="margin:16px 0 6px"><b>Mudur vardiya devri</b> &mdash; ana kasa terminali, kasiyer farki degildir ('+dv.length+'):</p>'+
+      sr2Tab('<th>Sube</th><th>Saat</th><th>Term.</th><th>Personel</th><th class="n">Tutar</th><th>Not</th>',
+        dv.map(function(m){ return '<tr><td>'+srEsc(m.sube)+'</td><td class="sr2-mu">'+srEsc(m.saat||'')+'</td><td class="sr2-mu">t'+
+          srEsc(String(m.terminal||'').replace(/\D/g,''))+'</td><td><b>'+srEsc(m.personel)+'</b></td>'+
+          '<td class="n">'+sr2N(m.tutar)+'</td><td class="sr2-sm sr2-mu">'+srEsc(m['not']||m.tur||'')+'</td></tr>'; }).join(''));
+  }
+  var sf=(((k.ek||{}).sifirlama)||[]).filter(function(r){return sr2Var(sb,r.sube);});
+  if(sf.length){
+    h+='<p class="sr2-sm" style="margin:16px 0 6px"><b>Sifirlama kayitlari</b> &mdash; terminal bakiyesini sifira indiren 90/91 kayitlari, fark degildir ('+sf.length+'):</p>'+
+      sr2Tab('<th>Sube</th><th>Saat</th><th>Term.</th><th>Personel</th><th class="n">Tutar</th>',
+        sf.map(function(m){ return '<tr><td>'+srEsc(m.sube)+'</td><td class="sr2-mu">'+srEsc(m.saat||'')+'</td><td class="sr2-mu">t'+
+          srEsc(String(m.terminal||'').replace(/\D/g,''))+'</td><td>'+srEsc(m.personel)+'</td><td class="n">'+sr2N(m.tutar)+'</td></tr>'; }).join(''));
+  }
+  if((k.ek||{}).aciklama) h+='<p class="sr2-sm sr2-mu" style="margin:10px 0 0">'+srEsc(k.ek.aciklama)+'</p>';
+  return h;
+}
+
+/* ---------- 9. Yorumlar ---------- */
+var SR2_SEV={y:['YUKSEK','y'],o:['ORTA','o'],t:['TAKIP','t'],d:['TEYIT','d'],n:['NOT','t']};
 function sr2Yorum(d,sb){
   var B=((d.denetim||{}).bulgular)||[];
-  var sira={y:0,o:1,t:2,d:3};
+  var sira={y:0,o:1,t:2,n:3,d:4};
   var L=B.slice().sort(function(a,b){ return (sira[a.seviye]===undefined?9:sira[a.seviye])-(sira[b.seviye]===undefined?9:sira[b.seviye]); });
   if(sb!=='TUMU'){
-    var sad=function(x){ return String(x||'').replace(/İ/g,'I').replace(/Ş/g,'S').replace(/Ç/g,'C')
-      .replace(/Ğ/g,'G').replace(/Ö/g,'O').replace(/Ü/g,'U').toUpperCase(); };
-    var key=sad(sb);
-    var adlar=SR2_SUBE.map(sad);
-    L=L.filter(function(b){
-      var bas=sad(b.baslik);
+    var key=sr2Ad(sb), adlar=SR2_SUBE.map(sr2Ad);
+    L=L.filter(function(b){ var bas=sr2Ad(b.baslik);
       var gecen=adlar.filter(function(a){ return bas.indexOf(a)>=0; });
-      if(gecen.length) return gecen.indexOf(key)>=0;      // basligi sube adi tasiyorsa sadece o subede
-      return true;                                        // genel bulgu her subede gorunur
-    });
+      if(gecen.length) return gecen.indexOf(key)>=0;
+      return true; });
   }
-  if(!L.length) return '<div class="sr2-bos">'+(sb==='TUMU'?'Bulgu yok.':'Bu sube icin ayrica bulgu yazilmamis.')+'</div>';
+  if(!L.length) return sr2Yok(sb==='TUMU'?'Bulgu yok.':'Bu sube icin ayrica bulgu yazilmamis.');
   return L.map(function(b){ var s=SR2_SEV[b.seviye]||SR2_SEV.t;
     return '<div class="sr2-f '+s[1]+'"><div class="meta"><span class="sr2-p '+
       (b.seviye==='y'?'bad':(b.seviye==='o'?'wrn':(b.seviye==='d'?'ok':'gri')))+'">'+s[0]+'</span></div>'+
-      '<h5>'+srEsc(b.baslik)+'</h5><p>'+srEsc(b.aciklama)+'</p></div>';
-  }).join('');
+      '<h5>'+srEsc(b.baslik)+'</h5><p>'+srEsc(b.aciklama)+'</p></div>'; }).join('');
 }
 
-/* ---------- eski gunler icin ozet ---------- */
-function sr2Eski(d,sb){
-  var a=d.ara||{}, su=a.subeler||{}, h='';
-  var liste=(sb==='TUMU'?SR2_SUBE:[sb]).filter(function(s){return su[s];});
-  var rows=liste.map(function(s){ var u=su[s], t=u.toplam||{};
-    return '<tr><td><b>'+srEsc(s)+'</b></td><td class="n">'+sr2N(t.stake)+'</td><td class="n">'+sr2N(t.payout)+'</td>'+
-      '<td class="n">'+sr2Sgn(t.kar)+'</td><td class="n sr2-mu">'+srAdet(t.bilet)+'</td></tr>'; }).join('');
-  h+=sr2Sec('&#8226;','Sube ozeti','Betty tabanli',
-    sr2Tab('<th>Sube</th><th class="n">Bahis</th><th class="n">Odeme</th><th class="n">Kar / Zarar</th><th class="n">Bilet</th>',rows));
-  var k=(d.kasa||{}).subeler||{};
-  var kr=liste.filter(function(s){return k[s];}).map(function(s){ var o=k[s];
-    return '<tr><td><b>'+srEsc(s)+'</b></td><td class="n">'+sr2Sgn(o.tutar)+'</td><td class="n">'+sr2Sgn(o.kasiyerToplam)+'</td>'+
-      '<td class="n">'+sr2Sgn(o.anaKasa)+'</td><td>'+srEsc(o.kapatan||'-')+'</td><td class="sr2-mu">'+srEsc(o.saat||'')+'</td></tr>'; }).join('');
-  if(kr) h+=sr2Sec('&#8226;','Kasa farklari','',
-    sr2Tab('<th>Sube</th><th class="n">Sube farki</th><th class="n">Kasiyerler</th><th class="n">Ana kasa</th><th>Kapatan</th><th>Saat</th>',kr));
-  var g=d.geceGiris||{};
-  if((g.satirlar||[]).length){
-    var gr=(g.satirlar||[]).filter(function(r){return sb==='TUMU'||r.sube===sb;}).map(function(r){
-      return '<tr><td>'+(sb==='TUMU'?'<b>'+srEsc(r.sube)+'</b> &middot; ':'')+srEsc(r.kanal)+'</td>'+
-        '<td class="sr2-mu">'+srEsc(r.ticket||'')+'</td><td class="n">'+sr2N(r.girilenStake)+'</td><td class="n">'+sr2N(r.panelStake)+'</td>'+
-        '<td class="n">'+sr2N(r.girilenPayout)+'</td><td class="n">'+sr2N(r.panelPayout)+'</td>'+
-        '<td>'+(r.durum==='dogru'?'<span class="sr2-p ok">DOGRU</span>':'<span class="sr2-p bad">HATALI</span>')+'</td></tr>'; }).join('');
-    h+=sr2Sec('&#8226;','Gece girisleri',(g.ozet?g.ozet.dogru+' / '+g.ozet.toplam+' dogru':''),
-      sr2Tab('<th>Kanal</th><th>Bilet</th><th class="n">Girilen ciro</th><th class="n">Panel ciro</th><th class="n">Girilen odeme</th><th class="n">Panel odeme</th><th>Durum</th>',gr));
-  }
+/* ---------- 10. Seriler, kurus ve yontem ---------- */
+function sr2Ek(d,sb){
+  var den=d.denetim||{}, h='';
+  var ser=(Array.isArray(den.seriler)?den.seriler:[]).filter(function(x){return sr2Var(sb,x.sube);});
+  ser.forEach(function(sr){
+    h+='<p class="sr2-sm" style="margin:0 0 6px"><b>Pes pese duzeltme serisi</b> &mdash; '+srEsc(sr.sube||'')+' &middot; <b>'+srEsc(sr.personel)+'</b> &middot; '+
+       srEsc(sr.baslangic)+'-'+srEsc(sr.bitis)+' arasi '+sr.adet+' kayit, toplam '+sr2N(sr.toplam)+' TL</p>'+
+      sr2Tab('<th>Saat</th><th>Bilet</th><th class="n">Tutar</th><th>Aciklama</th>',
+        (sr.islemler||[]).map(function(i){ return '<tr><td class="sr2-mu">'+srEsc(i.saat)+'</td><td class="sr2-mu">'+srEsc(i.ticket||'-')+
+          '</td><td class="n">'+sr2N(i.tutar)+'</td><td class="sr2-sm">'+srEsc(i.aciklama||'')+'</td></tr>'; }).join(''));
+  });
+  var kr=(den.kurus||[]).filter(function(x){return sr2Var(sb,x.sube);});
+  if(kr.length) h+='<p class="sr2-sm sr2-mu" style="margin:12px 0 0"><b>Kurus duzeltmeleri</b> (5 TL alti, rapora alinmadi): '+
+    kr.map(function(x){return srEsc(x.sube)+' '+srEsc(x.personel)+' <b>'+x.adet+'</b>';}).join(' &middot; ')+'</p>';
+  var n=[].concat(((d.ara||{}).notlar)||[], (den.notlar)||[], ((d.kasa||{}).notlar)||[]);
+  if(n.length) h+='<p class="sr2-sm" style="margin:14px 0 6px"><b>Notlar</b></p><ul class="sr2-sm sr2-mu" style="margin:0 0 10px;padding-left:18px">'+
+    n.map(function(x){return '<li>'+srEsc(x)+'</li>';}).join('')+'</ul>';
+  h+='<p class="sr2-sm sr2-mu" style="margin:10px 0 0">Kasa farki: Cash Shop Discrepancy Up (88) / Down (89). '+
+    'Kasiyer farki: Cash Term Discrepancy Up (90) / Down (91) &mdash; terminal bakiyesini sifirlamayan kayitlar. '+
+    'Mudur-kasiyer hareketleri: Till1CashIn / Till1CashOut, tutar ve aciklamadaki isim ile eslestirildi. '+
+    'Kanal: aciklamadaki hesap numarasi 6 haneli ise ONLINE, 8-10 haneli ise 365. '+
+    'Bahis = ham stake + stake adj up &minus; down; odeme = ham payout + PO adj up &minus; down. '+
+    'Rakamlarin tamami panellerden alinmistir; veri gelmeyen alana &laquo;veri yok&raquo; yazilir.'+
+    (d.olusturmaISO?'<br>Olusturma: '+srEsc(d.olusturmaISO)+' &middot; '+srEsc(d.kaynak||''):'')+'</p>';
   return h;
 }
-
-/* ---------- ust bant + sekmeler + iskele ---------- */
+/* ---------- ust bant, sekmeler, iskele ---------- */
 function sr2Kpi(d,sb){
   var a=d.ara||{}, sk=a.sirket||{}, su=a.subeler||{}, kasa=(d.kasa||{}).subeler||{};
   var bahis,odeme,kar,bilet,kf=null,kfAd='';
   if(sb==='TUMU'){
     bahis=sk.stake; odeme=sk.payout; kar=sk.kar; bilet=sk.bilet;
-    kf=SR2_SUBE.reduce(function(p,s){ return p+((kasa[s]||{}).tutar||0); },0); kfAd='dort sube toplami';
+    if(bahis==null){ bahis=0;odeme=0;kar=0;bilet=0;
+      SR2_SUBE.forEach(function(s){ var t=(sr2Bul(su,s)||{}).toplam||{};
+        bahis+=t.stake||0;odeme+=t.payout||0;kar+=t.kar||0;bilet+=t.bilet||0; }); }
+    kf=SR2_SUBE.reduce(function(p,s){ return p+((sr2Bul(kasa,s)||{}).tutar||0); },0);
+    kfAd='dort sube toplami';
   }else{
-    var u=su[sb]||{}, t=u.toplam||{};
-    bahis=t.stake; odeme=t.payout; kar=t.kar; bilet=t.bilet;
-    var o=kasa[sb]; if(o){ kf=o.tutar; kfAd='kapatan '+(o.kapatan||'-')+' &middot; '+(o.saat||''); }
+    var t2=(sr2Bul(su,sb)||{}).toplam||{};
+    bahis=t2.stake; odeme=t2.payout; kar=t2.kar; bilet=t2.bilet;
+    var o=sr2Bul(kasa,sb); if(o){ kf=o.tutar; kfAd='kapatan '+(o.kapatan||'-')+' &middot; '+(o.saat||''); }
   }
   var M=d.mutabakat, mz=M&&M.ozet;
   var h='<div class="sr2-kpi">'+
@@ -4070,61 +4422,64 @@ function sr2Kpi(d,sb){
     '<div class="sr2-k"><b>Odeme</b><span>'+sr2N(odeme)+'</span><small>&nbsp;</small></div>'+
     '<div class="sr2-k"><b>Kar / Zarar</b><span class="'+((kar||0)<0?'sr2-neg':'sr2-pos')+'">'+((kar||0)>0?'+':'')+sr2N(kar)+'</span><small>&nbsp;</small></div>'+
     '<div class="sr2-k"><b>Kasa farki</b><span class="'+((kf||0)<0?'sr2-neg':'sr2-pos')+'">'+((kf||0)>0?'+':'')+sr2N(kf)+'</span><small>'+kfAd+'</small></div>';
-  if(mz) h+='<div class="sr2-k"><b>Mutabakat</b><span class="'+(mz.tutmayan?'sr2-neg':'sr2-pos')+'">'+mz.tutan+' / '+mz.kontrol+'</span>'+
+  if(mz) h+='<div class="sr2-k"><b>BASCOM mutabakati</b><span class="'+(mz.tutmayan?'sr2-neg':'sr2-pos')+'">'+mz.tutan+' / '+mz.kontrol+'</span>'+
     '<small>'+(mz.tutmayan?mz.tutmayan+' kalem tutmuyor':'tamami tutuyor')+'</small></div>';
   return h+'</div>';
 }
-function sr2SubeFark(M,s){
-  var u=M&&M.subeler&&M.subeler[s]; if(!u) return null;
-  var n=0, o=u.ozet||{};
-  ['bahisDurum','odemeDurum','kasaDurum','floatDurum'].forEach(function(k){ if(o[k]==='fark') n++; });
-  (u.sanal||[]).forEach(function(x){ if(x.bettyDurum==='fark') n++; if(x.bascomDurum==='fark') n++; });
-  (u.kanal||[]).forEach(function(x){ if(x.durum==='fark') n++; });
-  if(u.mudur) n+=(u.mudur.sorunlu||0);
-  return n;
+function sr2SubeFark(d,s){
+  var M=d.mutabakat, n=0, varMi=false;
+  var u=M&&sr2Bul(M.subeler,s);
+  if(u){ varMi=true; var o=u.ozet||{};
+    ['bahisDurum','odemeDurum','kasaDurum','floatDurum'].forEach(function(k){ if(o[k]==='fark') n++; });
+    (u.sanal||[]).forEach(function(x){ if(x.bettyDurum==='fark') n++; if(x.bascomDurum==='fark') n++; });
+    (u.kanal||[]).forEach(function(x){ if(x.durum==='fark') n++; });
+    if(u.or){ (u.or.kayitlar||[]).forEach(function(x){ if(x.durum!=='ok') n++; }); n+=((u.or.fazla||[]).length); }
+  }
+  (((d.geceGiris||{}).satirlar)||[]).forEach(function(r){ if(sr2Esit(r.sube,s)){ varMi=true; if(/HATAL/i.test(String(r.durum||''))) n++; } });
+  var sec=(((d.denetim||{}).subeler)||[]).filter(function(x){return sr2Esit(x.sube,s);})[0];
+  if(sec){ varMi=true; n+=((sec.managerOzet||{}).sorunlu)||0; }
+  return varMi?n:null;
 }
 function sr2Tabs(d){
-  var M=d.mutabakat;
-  var h='<div class="sr2-tabs">';
-  var hep=0, hepVar=false;
-  SR2_SUBE.forEach(function(s){ var n=sr2SubeFark(M,s); if(n!==null){hepVar=true;hep+=n;} });
+  var h='<div class="sr2-tabs">', hep=0, hepVar=false;
+  SR2_SUBE.forEach(function(s){ var n=sr2SubeFark(d,s); if(n!==null){hepVar=true;hep+=n;} });
   h+='<button type="button" class="sr2-tab'+(sr2Aktif==='TUMU'?' on':'')+'" data-sr2="TUMU">TUM SUBELER'+
      (hepVar?'<span class="n'+(hep?'':' ok')+'">'+hep+'</span>':'')+'</button>';
-  SR2_SUBE.forEach(function(s){
-    var n=sr2SubeFark(M,s);
+  SR2_SUBE.forEach(function(s){ var n=sr2SubeFark(d,s);
     h+='<button type="button" class="sr2-tab'+(sr2Aktif===s?' on':'')+'" data-sr2="'+srEsc(s)+'">'+srEsc(s)+
-       (n!==null?'<span class="n'+(n?'':' ok')+'">'+n+'</span>':'')+'</button>';
-  });
+       (n!==null?'<span class="n'+(n?'':' ok')+'">'+n+'</span>':'')+'</button>'; });
   return h+'</div>';
 }
 function srHtml(d){
   sr2Style();
   var M=d.mutabakat, sb=sr2Aktif;
-  var bas='<div class="sr2-bar"><div><div style="font-size:16px;font-weight:650">'+srEsc(d.gun||d.tarih||'')+
-    '</div><div class="sr2-sm sr2-mu">Is gunu '+srEsc(d.isGunu||'')+(sb!=='TUMU'?' &middot; <b>'+srEsc(sb)+'</b>':'')+'</div></div></div>';
-  var h=bas+sr2Tabs(d)+sr2Kpi(d,sb);
-  if(!M){
-    h+='<div class="sr2-bos" style="margin-bottom:18px">Bu gun eski bicimde kaydedilmis &mdash; BASCOM mutabakati, kanal ve adjustment ayrintilari yok. Asagida o gunun ozeti ve bulgulari var.</div>';
-    h+=sr2Eski(d,sb);
-    h+=sr2Sec('7','Yorumlar','denetim notlari',sr2Yorum(d,sb));
-    return h;
-  }
-  h+=sr2Sec('1','Betty &harr; BASCOM mutabakati','ayni gun, iki bagimsiz kaynak',sr2Mutabakat(M,sb));
-  h+=sr2Sec('2','Sanallari dogru mu basti','panel &rarr; Betty &rarr; BASCOM',sr2Sanal(M,sb));
-  h+=sr2Sec('3','Shop in / out','online &middot; 365 &middot; tip 1 &middot; discount',sr2Kanal(M,sb));
-  h+=sr2Sec('4','Odeme duzeltmeleri (Adj PO)','kasadan cikan / donen para',sr2Adj(M,sb,'po'));
-  h+=sr2Sec('5','Bahis duzeltmeleri (Adj Stake)','5 TL ustu tek tek',sr2Adj(M,sb,'stake'));
-  h+=sr2Sec('6','Mudur in / out','to manager &middot; from manager',sr2Mudur(M,sb));
-  h+=sr2Sec('7','Yorumlar','denetim notlari',sr2Yorum(d,sb));
+  if(sb!=='TUMU'&&SR2_SUBE.indexOf(sb)<0) sb=sr2Aktif='TUMU';
+  var h='<div class="sr2-bar"><div><div style="font-size:16px;font-weight:650">'+srEsc(d.gun||d.tarih||'')+
+    '</div><div class="sr2-sm sr2-mu">Is gunu '+srEsc(d.isGunu||'')+(sb!=='TUMU'?' &middot; <b>'+srEsc(sb)+'</b>':' &middot; dort sube')+'</div></div></div>';
+  h+=sr2Tabs(d)+sr2Kpi(d,sb);
+  if(!M) h+='<div class="sr2-bos" style="margin:0 0 20px">Bu gun BASCOM kapanis sistemi denetime dahil edilmeden once hazirlandi &mdash; '+
+    'Betty &harr; BASCOM mutabakati ve kanal karsilastirmasi yok. Diger butun bolumler o gunun kendi verisinden cizilmistir.</div>';
+  h+=sr2Sec('1','Ciro ve kaynak kirilimi','Betty &middot; Futbol &middot; Kiron &middot; Golden &middot; Global',sr2Ciro(d,sb));
+  h+=sr2Sec('2','Betty &harr; BASCOM mutabakati','ayni gun, iki bagimsiz kaynak',sr2Mutabakat(M,sb));
+  h+=sr2Sec('3','Sanallari dogru mu basti','panel &rarr; Betty &rarr; BASCOM',sr2SanalBolum(d,M,sb));
+  h+=sr2Sec('4','Shop in / out','online &middot; 365 &middot; tip 1 &middot; discount',sr2Shop(d,M,sb));
+  h+=sr2Sec('5','Odeme duzeltmeleri (Adj PO)','kasadan cikan / donen para',sr2Adj(d,M,sb,'po'));
+  h+=sr2Sec('6','Bahis duzeltmeleri (Adj Stake)','5 TL ustu tek tek',sr2Adj(d,M,sb,'stake'));
+  h+=sr2Sec('7','Mudur in / out','to manager &middot; from manager',sr2Mudur(d,M,sb));
+  h+=sr2Sec('8','Kasa farklari','kasiyer bazinda &middot; ana kasa &middot; devir',sr2Kasa(d,sb));
+  h+=sr2Sec('9','Yorumlar','denetim notlari',sr2Yorum(d,sb));
+  h+=sr2Sec('10','Seriler, kurus ve yontem','',sr2Ek(d,sb));
   return h;
 }
-document.addEventListener('click',function(e){
-  var b=e.target&&e.target.closest?e.target.closest('.sr2-tab'):null;
-  if(!b||!b.getAttribute('data-sr2')) return;
-  sr2Aktif=b.getAttribute('data-sr2');
-  var sel=document.getElementById('srTarih');
-  if(sel&&sel.value) srGoster(sel.value);
-});
+if(!window.__sr2click){ window.__sr2click=1;
+  document.addEventListener('click',function(e){
+    var b=e.target&&e.target.closest?e.target.closest('.sr2-tab'):null;
+    if(!b||!b.getAttribute('data-sr2')) return;
+    sr2Aktif=b.getAttribute('data-sr2');
+    var sel=document.getElementById('srTarih');
+    if(sel&&sel.value) srGoster(sel.value);
+  });
+}
 
 
 </script>
