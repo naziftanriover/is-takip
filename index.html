@@ -3955,8 +3955,8 @@ function sr2Mutabakat(M,sb){
   sr2Liste(sb).forEach(function(s){
     var u=sr2Bul(M.subeler,s); if(!u) return; var o=u.ozet||{}; bulundu=true;
     if(sb==='TUMU') rows+='<tr class="grp"><td colspan="6">'+srEsc(s)+' &middot; kapatan '+srEsc(o.kapatan||'-')+'</td></tr>';
-    rows+=sat('Bahis (ciro)',o.bahisBetty,o.bahisBascom,o.bahisDurum,'ham stake + stake adj up &minus; down');
-    rows+=sat('Odeme',o.odemeBetty,o.odemeBascom,o.odemeDurum,'ham payout + PO adj up &minus; down');
+    rows+=sat('Bahis (ciro)',o.bahisBetty,o.bahisBascom,o.bahisDurum,'ham stake + stake adj up - down');
+    rows+=sat('Odeme',o.odemeBetty,o.odemeBascom,o.odemeDurum,'ham payout + PO adj up - down');
     rows+=sat('Kasa farki',o.kasaBetty,o.kasaBascom,o.kasaDurum,'Betty 88/89 ile BASCOM cash diff ayni olmali');
     rows+='<tr><td>Float zinciri</td><td class="n">'+sr2N(o.oncekiEndFloat)+'</td><td class="n">'+sr2N(o.startFloat)+'</td>'+
       '<td class="n">'+(o.floatDurum==='ok'?'<span class="sr2-mu">0,00</span>':sr2Sgn((o.startFloat||0)-(o.oncekiEndFloat||0)))+'</td>'+
