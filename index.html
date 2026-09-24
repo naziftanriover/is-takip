@@ -3866,6 +3866,12 @@ function sr2Style(){
 ".sr2-p.wrn{background:var(--wrnb);color:var(--wrn);} .sr2-p.gri{background:var(--s2);color:var(--mu);}",
 ".sr2-mu{color:var(--mu);} .sr2-sm{font-size:11.5px;}",
 ".sr2-bos{padding:16px;background:var(--s1);border:1px dashed var(--ln);border-radius:10px;color:var(--mu);text-align:center;}",
+".sr2-sorun{border:1px solid var(--bad);border-radius:12px;background:var(--badb);padding:12px 13px 13px;margin:0 0 22px;}",
+".sr2-sorun-bas{display:flex;align-items:baseline;gap:10px;font-size:11.5px;font-weight:800;letter-spacing:.09em;color:var(--bad);margin:0 0 9px;}",
+".sr2-sorun-n{margin-left:auto;font-weight:600;letter-spacing:0;color:var(--bad);opacity:.85;}",
+".sr2-sorun .sr2-t{border-color:#f3c8c4;background:var(--s0);}",
+".sr2-git{cursor:pointer;} .sr2-git:hover{background:#fde9e7 !important;}",
+".sr2-temiz{border:1px solid var(--ok);background:var(--okb);color:var(--ok);border-radius:12px;padding:13px;margin:0 0 22px;font-size:13px;}",
 ".sr2-f{border:1px solid var(--ln);border-left-width:3px;border-radius:9px;padding:11px 13px;margin:0 0 9px;background:var(--s0);}",
 ".sr2-f.y{border-left-color:var(--bad);} .sr2-f.o{border-left-color:#d98324;}",
 ".sr2-f.t{border-left-color:#9aa4b2;} .sr2-f.d{border-left-color:var(--ok);}",
@@ -3885,8 +3891,63 @@ function sr2Pill(d){
   return '<span class="sr2-p gri">-</span>';
 }
 function sr2Sec(no,baslik,alt,govde){
-  return '<section class="sr2-sec"><div class="sr2-h"><span class="no">'+no+'</span><h4>'+baslik+'</h4>'+
+  return '<section class="sr2-sec" id="sr2-b'+no+'"><div class="sr2-h"><span class="no">'+no+'</span><h4>'+baslik+'</h4>'+
     (alt?'<span class="alt">'+alt+'</span>':'')+'</div>'+govde+'</section>';
+}
+
+/* ---------- EN USTTE: NEREDE HATA VAR ---------- */
+function sr2Sorunlar(d,M,sb){
+  var L=[];
+  function ek(seviye,sube,no,bolum,metin){ L.push({seviye:seviye,sube:sube,no:no,bolum:bolum,metin:metin}); }
+  var AD={bahisDurum:'Bahis (ciro)',odemeDurum:'Odeme',kasaDurum:'Kasa farki',floatDurum:'Float zinciri'};
+  sr2Liste(sb).forEach(function(s){
+    var u=M&&sr2Bul(M.subeler,s);
+    if(u){
+      var o=u.ozet||{};
+      Object.keys(AD).forEach(function(k){ if(o[k]==='fark')
+        ek('y',s,'2','Betty &harr; BASCOM',AD[k]+' tutmuyor: Betty '+sr2N(o[k.replace('Durum','Betty')])+' / BASCOM '+sr2N(o[k.replace('Durum','Bascom')])); });
+      (u.sanal||[]).forEach(function(x){
+        if(x.bettyDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - Betty ye girilen panel ile tutmuyor (fark '+sr2N(x.fark)+')');
+        if(x.bascomDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - BASCOM a yazilan panel ile tutmuyor'); });
+      (u.kanal||[]).forEach(function(x){ if(x.durum==='fark')
+        ek('y',s,'4','Shop in / out',x.yon+' '+x.kanal+' - Betty '+sr2N(x.betty)+' / BASCOM '+sr2N(x.bascom)+' (fark '+sr2N(x.fark)+')'); });
+      if(u.or){
+        (u.or.kayitlar||[]).forEach(function(x){ if(x.durum!=='ok')
+          ek('y',s,'4','OR ticket',(x.kategoriAd||x.kategori)+' '+sr2N(x.bascomTutar)+' - '+(x.durum==='yok'?'Bettyde karsiligi yok':'tutar/yon tutmuyor')); });
+        (u.or.fazla||[]).forEach(function(x){
+          ek('y',s,'4','OR ticket','Bettyde '+sr2N(x.tutar)+' TL duzeltme var, BASCOM OR bolumunde yok'); });
+      }
+    }
+    var sec=(((d.denetim||{}).subeler)||[]).filter(function(x){return sr2Esit(x.sube,s);})[0];
+    if(sec){ var srn=((sec.managerOzet||{}).sorunlu)||0;
+      if(srn) ek('o',s,'7','Mudur in / out',srn+' kayitin karsiligi yok'); }
+  });
+  (((d.geceGiris||{}).satirlar)||[]).forEach(function(r){
+    if(sr2Var(sb,r.sube)&&/HATAL/i.test(String(r.durum||'')))
+      ek('y',r.sube,'3','Gece girisi',r.kanal+' - girilen '+sr2N(r.girilenStake)+' / panel '+sr2N(r.panelStake)+' (fark '+sr2N(r.fark)+')'); });
+  var B=((d.denetim||{}).bulgular)||[];
+  var key=sr2Ad(sb), adlar=SR2_SUBE.map(sr2Ad);
+  B.forEach(function(x){
+    if(x.seviye!=='y'&&x.seviye!=='o') return;
+    var bas=sr2Ad(x.baslik), gecen=adlar.filter(function(a2){return bas.indexOf(a2)>=0;});
+    if(sb!=='TUMU'&&gecen.length&&gecen.indexOf(key)<0) return;
+    var sb2=gecen.length?SR2_SUBE[adlar.indexOf(gecen[0])]:'';
+    ek(x.seviye,sb2,'9','Yorumlar',String(x.baslik).replace(/^[^-]*—\s*/,''));
+  });
+  var sira={y:0,o:1}; L.sort(function(a2,b2){return (sira[a2.seviye]||9)-(sira[b2.seviye]||9);});
+  if(!L.length) return '<div class="sr2-temiz"><b>Hata yok.</b> Butun kontroller tutuyor'+(sb==='TUMU'?'':' &mdash; '+srEsc(sb))+'.</div>';
+  var ny=L.filter(function(x){return x.seviye==='y';}).length;
+  var h='<div class="sr2-sorun"><div class="sr2-sorun-bas">NEREDE HATA VAR'+
+    '<span class="sr2-sorun-n">'+L.length+' kalem'+(ny?' &middot; '+ny+' yuksek':'')+'</span></div>'+
+    '<table class="sr2-t"><tbody>';
+  L.forEach(function(x){
+    h+='<tr class="sr2-git" data-git="sr2-b'+x.no+'">'+
+      '<td style="width:74px"><span class="sr2-p '+(x.seviye==='y'?'bad':'wrn')+'">'+(x.seviye==='y'?'YUKSEK':'ORTA')+'</span></td>'+
+      '<td style="width:110px"><b>'+(x.sube?srEsc(x.sube):'<span class="sr2-mu">tum subeler</span>')+'</b></td>'+
+      '<td style="width:150px" class="sr2-mu">'+x.no+' &middot; '+x.bolum+'</td>'+
+      '<td>'+srEsc(x.metin)+'</td></tr>';
+  });
+  return h+'</tbody></table><p class="sr2-sm sr2-mu" style="margin:8px 0 0">Satira tiklayinca ilgili bolume gider. Kayitlarin tamami asagida kendi bolumunde duruyor.</p></div>';
 }
 function sr2Tab(bas,satir,foot){
   return '<div class="sr2-wrap"><table class="sr2-t"><thead><tr>'+bas+'</tr></thead><tbody>'+
@@ -4445,7 +4506,7 @@ function srHtml(d){
   if(sb!=='TUMU'&&SR2_SUBE.indexOf(sb)<0) sb=sr2Aktif='TUMU';
   var h='<div class="sr2-bar"><div><div style="font-size:16px;font-weight:650">'+srEsc(d.gun||d.tarih||'')+
     '</div><div class="sr2-sm sr2-mu">Is gunu '+srEsc(d.isGunu||'')+(sb!=='TUMU'?' &middot; <b>'+srEsc(sb)+'</b>':' &middot; dort sube')+'</div></div></div>';
-  h+=sr2Tabs(d)+sr2Kpi(d,sb);
+  h+=sr2Tabs(d)+sr2Kpi(d,sb)+sr2Sorunlar(d,M,sb);
   if(!M) h+='<div class="sr2-bos" style="margin:0 0 20px">Bu gun BASCOM kapanis sistemi denetime dahil edilmeden once hazirlandi &mdash; '+
     'Betty &harr; BASCOM mutabakati ve kanal karsilastirmasi yok. Diger butun bolumler o gunun kendi verisinden cizilmistir.</div>';
   h+=sr2Sec('1','Ciro ve kaynak kirilimi','Betty &middot; Futbol &middot; Kiron &middot; Golden &middot; Global',sr2Ciro(d,sb));
@@ -4462,6 +4523,9 @@ function srHtml(d){
 }
 if(!window.__sr2click){ window.__sr2click=1;
   document.addEventListener('click',function(e){
+    var gt=e.target&&e.target.closest?e.target.closest('.sr2-git'):null;
+    if(gt&&gt.getAttribute('data-git')){ var el=document.getElementById(gt.getAttribute('data-git'));
+      if(el){ el.scrollIntoView({behavior:'smooth',block:'start'}); } return; }
     var b=e.target&&e.target.closest?e.target.closest('.sr2-tab'):null;
     if(!b||!b.getAttribute('data-sr2')) return;
     sr2Aktif=b.getAttribute('data-sr2');
