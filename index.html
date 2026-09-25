@@ -3934,7 +3934,7 @@ function sr2Sorunlar(d,M,sb){
     var sb2=gecen.length?SR2_SUBE[adlar.indexOf(gecen[0])]:'';
     ek(x.seviye,sb2,'9','Yorumlar',String(x.baslik).replace(/^[^-]*—\s*/,''));
   });
-  var sira={y:0,o:1}; L.sort(function(a2,b2){return (sira[a2.seviye]||9)-(sira[b2.seviye]||9);});
+  var sira={y:0,o:1}; function sv(x){return sira[x]===undefined?9:sira[x];} L.sort(function(a2,b2){return sv(a2.seviye)-sv(b2.seviye);});
   if(!L.length) return '<div class="sr2-temiz"><b>Hata yok.</b> Butun kontroller tutuyor'+(sb==='TUMU'?'':' &mdash; '+srEsc(sb))+'.</div>';
   var ny=L.filter(function(x){return x.seviye==='y';}).length;
   var h='<div class="sr2-sorun"><div class="sr2-sorun-bas">NEREDE HATA VAR'+
