@@ -3896,6 +3896,13 @@ function sr2Sec(no,baslik,alt,govde){
 }
 
 /* ---------- EN USTTE: NEREDE HATA VAR ---------- */
+/* hangi bacak tutmuyor: ciro mu odeme mi — ikisini de ayri ayri yazar */
+function sr2Bacak(gc,pc,go,po){
+  var t=[];
+  if(Math.abs((gc||0)-(pc||0))>0.005) t.push('ciro '+sr2N(gc)+' / panel '+sr2N(pc)+' (fark '+sr2N((gc||0)-(pc||0))+')');
+  if(Math.abs((go||0)-(po||0))>0.005) t.push('odeme '+sr2N(go)+' / panel '+sr2N(po)+' (fark '+sr2N((go||0)-(po||0))+')');
+  return t.length?t.join(' · '):'fark yok';
+}
 function sr2Sorunlar(d,M,sb){
   var L=[];
   function ek(seviye,sube,no,bolum,metin){ L.push({seviye:seviye,sube:sube,no:no,bolum:bolum,metin:metin}); }
@@ -3907,8 +3914,8 @@ function sr2Sorunlar(d,M,sb){
       Object.keys(AD).forEach(function(k){ if(o[k]==='fark')
         ek('y',s,'2','Betty &harr; BASCOM',AD[k]+' tutmuyor: Betty '+sr2N(o[k.replace('Durum','Betty')])+' / BASCOM '+sr2N(o[k.replace('Durum','Bascom')])); });
       (u.sanal||[]).forEach(function(x){
-        if(x.bettyDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - Betty ye girilen panel ile tutmuyor (fark '+sr2N(x.fark)+')');
-        if(x.bascomDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - BASCOM a yazilan panel ile tutmuyor'); });
+        if(x.bettyDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - Betty ye girilen panel ile tutmuyor: '+sr2Bacak(x.bettyStake,x.panelStake,x.bettyPo,x.panelPo));
+        if(x.bascomDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - BASCOM a yazilan panel ile tutmuyor: '+sr2Bacak(x.bascomStake,x.panelStake,x.bascomPo,x.panelPo)); });
       (u.kanal||[]).forEach(function(x){ if(x.durum==='fark')
         ek('y',s,'4','Shop in / out',x.yon+' '+x.kanal+' - Betty '+sr2N(x.betty)+' / BASCOM '+sr2N(x.bascom)+' (fark '+sr2N(x.fark)+')'); });
       if(u.or){
@@ -3924,7 +3931,7 @@ function sr2Sorunlar(d,M,sb){
   });
   (((d.geceGiris||{}).satirlar)||[]).forEach(function(r){
     if(sr2Var(sb,r.sube)&&/HATAL/i.test(String(r.durum||'')))
-      ek('y',r.sube,'3','Gece girisi',r.kanal+' - girilen '+sr2N(r.girilenStake)+' / panel '+sr2N(r.panelStake)+' (fark '+sr2N(r.fark)+')'); });
+      ek('y',r.sube,'3','Gece girisi',r.kanal+' - '+sr2Bacak(r.girilenStake,r.panelStake,r.girilenPayout,r.panelPayout)); });
   var B=((d.denetim||{}).bulgular)||[];
   var key=sr2Ad(sb), adlar=SR2_SUBE.map(sr2Ad);
   B.forEach(function(x){
