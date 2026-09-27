@@ -4178,7 +4178,8 @@ function sr2KanalMut(M,sb){
     if(sb==='TUMU'&&(u.kanal||[]).length) rows+='<tr class="grp"><td colspan="6">'+srEsc(s)+'</td></tr>';
     (u.kanal||[]).forEach(function(x){
       rows+='<tr><td><span class="sr2-p '+(x.yon==='IN'?'ok':'bad')+'">'+srEsc(x.yon)+'</span></td>'+
-        '<td><b>'+srEsc(x.kanal)+'</b></td><td class="n">'+sr2N(x.betty)+'</td><td class="n">'+sr2N(x.bascom)+'</td>'+
+        '<td><b>'+srEsc(x.kanal)+'</b>'+(x['not']?'<div class="sr2-sm sr2-mu" style="margin-top:3px;max-width:520px;line-height:1.45">'+srEsc(x['not'])+'</div>':'')+'</td>'+
+        '<td class="n">'+sr2N(x.betty)+'</td><td class="n">'+sr2N(x.bascom)+'</td>'+
         '<td class="n">'+(x.durum==='ok'?'<span class="sr2-mu">0,00</span>':sr2Sgn(x.fark))+'</td><td>'+sr2Pill(x.durum)+'</td></tr>';
     });
     (u.kanalHaric||[]).forEach(function(x){
@@ -4187,7 +4188,9 @@ function sr2KanalMut(M,sb){
     });
   });
   if(!bulundu) return sr2Yok('Bu sube icin kanal mutabakati yok.');
-  var h='<p class="sr2-sm sr2-mu" style="margin:0 0 6px">Betty&rsquo;deki shop in/out ile BASCOM&rsquo;a yazilan transfer satirlari kanal kanal karsilastirilir.</p>'+
+  var h='<p class="sr2-sm sr2-mu" style="margin:0 0 6px">Betty&rsquo;deki shop in/out ile BASCOM&rsquo;a yazilan transfer satirlari kanal kanal karsilastirilir. '+
+    '<b>TUTUYOR</b> iki taraf ayni &middot; <b>ACIKLANDI</b> rakam farkli ama sebebi bulundu, kasaya etkisi yok &middot; '+
+    '<b>FARK</b> sebebi bulunamadi, yukaridaki hata panelinde de cikar.</p>'+
     sr2Tab('<th>Yon</th><th>Kanal</th><th class="n">Betty</th><th class="n">BASCOM</th><th class="n">Fark</th><th>Durum</th>',rows);
   if(har) h+='<p class="sr2-sm sr2-mu" style="margin:14px 0 6px">Kanal disi tutulanlar &mdash; kur farki, duzeltme ve sube disi odemeler BASCOM&rsquo;da ayri alanlarda durur:</p>'+
     sr2Tab('<th>Yon</th><th>Tur</th><th class="n">Tutar</th><th class="n">Adet</th>',har);
