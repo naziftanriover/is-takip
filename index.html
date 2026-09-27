@@ -3906,7 +3906,18 @@ function sr2Bacak(gc,pc,go,po){
 }
 function sr2Sorunlar(d,M,sb){
   var L=[];
-  function ek(seviye,sube,no,bolum,metin){ L.push({seviye:seviye,sube:sube,no:no,bolum:bolum,metin:metin}); }
+  var _gor={};
+  function ek(seviye,sube,no,bolum,metin,anahtar){
+    if(anahtar){ if(_gor[anahtar]) return; _gor[anahtar]=1; }
+    L.push({seviye:seviye,sube:sube,no:no,bolum:bolum,metin:metin,anahtar:anahtar||''}); }
+  /* Bir metindeki anlamli sayilar: kurusu olanlar veya 100 den buyukler.
+     Saat, dakika ve kucuk sira numaralari elenir. */
+  function sr2Rak(t){
+    var o={}, m=String(t).match(/\d[\d\.]*(?:,\d+)?/g)||[];
+    m.forEach(function(x){ var v=parseFloat(x.replace(/\./g,'').replace(',','.'));
+      if(!isNaN(v)&&(x.indexOf(',')>=0||v>=100)) o[v.toFixed(2)]=1; });
+    return Object.keys(o);
+  }
   var AD={bahisDurum:'Bahis (ciro)',odemeDurum:'Odeme',kasaDurum:'Kasa farki',floatDurum:'Float zinciri'};
   sr2Liste(sb).forEach(function(s){
     var u=M&&sr2Bul(M.subeler,s);
@@ -3915,7 +3926,7 @@ function sr2Sorunlar(d,M,sb){
       Object.keys(AD).forEach(function(k){ if(o[k]==='fark')
         ek('y',s,'2','Betty &harr; BASCOM',AD[k]+' tutmuyor: Betty '+sr2N(o[k.replace('Durum','Betty')])+' / BASCOM '+sr2N(o[k.replace('Durum','Bascom')])); });
       (u.sanal||[]).forEach(function(x){
-        if(x.bettyDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - Betty ye girilen panel ile tutmuyor: '+sr2Bacak(x.bettyStake,x.panelStake,x.bettyPo,x.panelPo));
+        if(x.bettyDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - Betty ye girilen panel ile tutmuyor: '+sr2Bacak(x.bettyStake,x.panelStake,x.bettyPo,x.panelPo),'gece:'+sr2Ad(s)+'|'+sr2Ad(x.kanal));
         if(x.bascomDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - BASCOM a yazilan panel ile tutmuyor: '+sr2Bacak(x.bascomStake,x.panelStake,x.bascomPo,x.panelPo)); });
       (u.kanal||[]).forEach(function(x){ if(x.durum==='fark')
         ek('y',s,'4','Shop in / out',x.yon+' '+x.kanal+' - Betty '+sr2N(x.betty)+' / BASCOM '+sr2N(x.bascom)+' (fark '+sr2N(x.fark)+')'); });
@@ -3932,7 +3943,7 @@ function sr2Sorunlar(d,M,sb){
   });
   (((d.geceGiris||{}).satirlar)||[]).forEach(function(r){
     if(sr2Var(sb,r.sube)&&/HATAL/i.test(String(r.durum||'')))
-      ek('y',r.sube,'3','Gece girisi',r.kanal+' - '+sr2Bacak(r.girilenStake,r.panelStake,r.girilenPayout,r.panelPayout)); });
+      ek('y',r.sube,'3','Gece girisi',r.kanal+' - '+sr2Bacak(r.girilenStake,r.panelStake,r.girilenPayout,r.panelPayout),'gece:'+sr2Ad(r.sube)+'|'+sr2Ad(r.kanal)); });
   var B=((d.denetim||{}).bulgular)||[];
   var key=sr2Ad(sb), adlar=SR2_SUBE.map(sr2Ad);
   B.forEach(function(x){
@@ -3940,7 +3951,15 @@ function sr2Sorunlar(d,M,sb){
     var bas=sr2Ad(x.baslik), gecen=adlar.filter(function(a2){return bas.indexOf(a2)>=0;});
     if(sb!=='TUMU'&&gecen.length&&gecen.indexOf(key)<0) return;
     var sb2=gecen.length?SR2_SUBE[adlar.indexOf(gecen[0])]:'';
-    ek(x.seviye,sb2,'9','Yorumlar',String(x.baslik).replace(/^[^-]*—\s*/,''));
+    var metin=String(x.baslik).replace(/^[^-]*—\s*/,'');
+    var rk=sr2Rak(metin);
+    if(rk.length){
+      var ayni=L.some(function(y){ if(sb2&&y.sube&&y.sube!==sb2) return false;
+        var yr=sr2Rak(y.metin);
+        return rk.every(function(z){ return yr.indexOf(z)>=0; }); });
+      if(ayni) return;   /* ayni olay zaten panelde; bolum 9 da yerinde duruyor */
+    }
+    ek(x.seviye,sb2,'9','Yorumlar',metin);
   });
   var sira={y:0,o:1}; function sv(x){return sira[x]===undefined?9:sira[x];} L.sort(function(a2,b2){return sv(a2.seviye)-sv(b2.seviye);});
   if(!L.length) return '<div class="sr2-temiz"><b>Hata yok.</b> Butun kontroller tutuyor'+(sb==='TUMU'?'':' &mdash; '+srEsc(sb))+'.</div>';
