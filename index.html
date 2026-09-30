@@ -533,6 +533,7 @@ tr.sr-fark td,tr.sr-gec td{background:#fdf9ef}
     <button class="sekme-btn" data-hedef="sekme-rota" type="button">Rota</button>
     <button class="sekme-btn" data-hedef="sekme-rapor" type="button">Aylik Rapor</button>
     <button class="sekme-btn" data-hedef="sekme-subeRapor" type="button">Sube Raporu</button>
+    <button class="sekme-btn" data-hedef="sekme-haftalik" type="button">Haftalik Rapor</button>
     <button class="sekme-btn" data-hedef="sekme-karne" type="button">Personel Karnesi</button>
     <button class="sekme-btn" data-hedef="sekme-cezalar" type="button">Cezalar</button>
     <button class="sekme-btn ceza-btn" data-hedef="sekme-ceza" type="button">Ceza</button>
@@ -734,6 +735,17 @@ tr.sr-fark td,tr.sr-gec td{background:#fdf9ef}
         </div>
       </div>
       <div id="srIcerik"><p class="bos-satir">Yukleniyor...</p></div>
+    </section>
+
+    <!-- HAFTALIK RAPOR -->
+    <section id="sekme-haftalik" class="sekme-bolum gizli">
+      <h2>Haftalik Rapor</h2>
+      <div class="kart-form">
+        <div class="form-satir">
+          <div class="alan"><label>Rapor gunu</label><select id="hrTarih"></select></div>
+        </div>
+      </div>
+      <div id="hrIcerik"><p class="bos-satir">Yukleniyor...</p></div>
     </section>
 
     <!-- PERSONEL KARNESI -->
@@ -1187,6 +1199,7 @@ const SEKME_IKON={
   'sekme-cezalar':'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>',
   'sekme-log':'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
   'sekme-subeRapor':'<path d="M3 3v18h18"/><path d="M7 15l3-4 3 3 5-7"/>',
+  'sekme-haftalik':'<path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/>',
   'sekme-subeler':'<path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/>',
   'sekme-yedek':'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>'
 };
@@ -1220,6 +1233,7 @@ function sekmeleriKur(){
     if(b.dataset.hedef==='sekme-rota') rotaYukle();
     if(b.dataset.hedef==='sekme-rapor') raporCiz();
     if(b.dataset.hedef==='sekme-subeRapor') subeRaporCiz();
+    if(b.dataset.hedef==='sekme-haftalik') haftalikCiz();
     if(b.dataset.hedef==='sekme-karne') karneCiz();
     if(b.dataset.hedef==='sekme-cezalar') cezalarCiz();
     if(b.dataset.hedef==='sekme-ceza') cezaCiz();
@@ -3792,6 +3806,85 @@ async function srGoster(gun){
       'Rapor bicimi degismis olabilir; gelistiriciye bildirin.</p>';
   }
 }
+
+
+// ================== HAFTALIK RAPOR (sube maillerinden) ==================
+// Veri kaynagi: Firestore koleksiyonu "haftalikRapor", belge kimligi = YYYY-MM-DD
+// Nazif "raporlari oku" dediginde otomatik yazilir; burada sadece OKUNUR.
+var hrListe=null, hrCache={};
+var HR_SUBE=['ALSANCAK','İTİMAT','KASGAR','ZEYTİNLİK'];
+function hrStyle(){
+  if(document.getElementById('hr-style'))return;
+  var st=document.createElement('style'); st.id='hr-style';
+  st.textContent=[
+"#hrIcerik{--tx:#1a2230;--mu:#66748a;--ln:#dde3ea;--s1:#f7f8fa;--bad:#b3261e;--badb:#fdecea;--ok:#0f7b52;--okb:#e6f5ee;color:var(--tx);font-size:13px;line-height:1.5;}",
+"#hrIcerik .hr-kart{border:1px solid var(--ln);border-radius:12px;padding:14px 16px;margin:0 0 16px;background:#fff;}",
+"#hrIcerik .hr-bas{font-size:15px;font-weight:700;margin:0 0 8px;padding-bottom:7px;border-bottom:1px solid var(--ln);}",
+"#hrIcerik .hr-metin{white-space:pre-wrap;font-size:12.5px;color:#39425a;margin:0 0 12px;}",
+"#hrIcerik .hr-sorun{border:1px solid var(--bad);border-radius:10px;background:var(--badb);padding:10px 12px;}",
+"#hrIcerik .hr-sorun-bas{font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--bad);margin:0 0 7px;}",
+"#hrIcerik .hr-sorun ul{margin:0;padding-left:18px;} #hrIcerik .hr-sorun li{margin:0 0 5px;color:#7a1a15;}",
+"#hrIcerik .hr-temiz{border:1px solid var(--ok);background:var(--okb);color:var(--ok);border-radius:10px;padding:9px 12px;font-size:12px;}",
+"#hrIcerik .hr-bos{padding:14px;background:var(--s1);border:1px dashed var(--ln);border-radius:10px;color:var(--mu);text-align:center;}"
+  ].join('');
+  document.head.appendChild(st);
+}
+function hrEsc(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function hrKartHtml(ad,o){
+  var g='<div class="hr-kart"><div class="hr-bas">'+hrEsc(ad)+'</div>';
+  if(!o){ g+='<div class="hr-bos">Bu sube icin rapor yok.</div></div>'; return g; }
+  g+='<div class="hr-metin">'+hrEsc(o.metin||'')+'</div>';
+  var tz=(o.tezatlar||[]);
+  if(tz.length){
+    g+='<div class="hr-sorun"><div class="hr-sorun-bas">⚠ TEZATLIKLAR ('+tz.length+')</div><ul>';
+    for(var i=0;i<tz.length;i++){ g+='<li>'+hrEsc(typeof tz[i]==='string'?tz[i]:(tz[i].mesaj||''))+'</li>'; }
+    g+='</ul></div>';
+  } else { g+='<div class="hr-temiz">Tezatlik bulunmadi.</div>'; }
+  return g+'</div>';
+}
+function hrHtml(d){
+  var subeler=(d&&d.subeler)||{};
+  var g='';
+  for(var i=0;i<HR_SUBE.length;i++){
+    var ad=HR_SUBE[i], o=subeler[ad];
+    if(!o){ var k=Object.keys(subeler); for(var j=0;j<k.length;j++){ if(typeof sr2Esit==='function'&&sr2Esit(k[j],ad)){o=subeler[k[j]];break;} } }
+    g+=hrKartHtml(ad,o);
+  }
+  if(d&&d.olusturuldu){ g+='<p class="bos-satir" style="font-size:11px;color:#8a93a5;margin-top:4px;">Olusturuldu: '+hrEsc(d.olusturuldu)+'</p>'; }
+  return g||'<p class="bos-satir">Rapor bos.</p>';
+}
+async function haftalikCiz(){
+  hrStyle();
+  var el=document.getElementById('hrIcerik'), sel=document.getElementById('hrTarih');
+  el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
+  try{
+    if(!hrListe){
+      hrListe=[];
+      try{ var ix=await db.collection('haftalikRapor').doc('gunler').get();
+        if(ix.exists && Array.isArray((ix.data()||{}).liste)) hrListe=ix.data().liste.slice();
+      }catch(e){}
+      hrListe.sort(function(a,b){ return a<b?1:(a>b?-1:0); });
+      sel.innerHTML=hrListe.length? hrListe.map(function(g){return '<option value="'+g+'">'+g+'</option>';}).join('') : '<option value="">-</option>';
+      sel.onchange=function(){ hrGoster(sel.value); };
+    }
+    if(!hrListe.length){ el.innerHTML='<p class="bos-satir">Henuz haftalik rapor yok. Nazif rapor okuttugunda buraya dusecek.</p>'; return; }
+    hrGoster(sel.value||hrListe[0]);
+  }catch(e){ el.innerHTML='<p class="bos-satir">Rapor okunamadi: '+hrEsc(e.message)+'</p>'; }
+}
+async function hrGoster(gun){
+  var el=document.getElementById('hrIcerik');
+  if(!gun){ el.innerHTML='<p class="bos-satir">Gun secilmedi.</p>'; return; }
+  el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
+  try{
+    var d=hrCache[gun];
+    if(!d){ var s=await db.collection('haftalikRapor').doc(gun).get();
+      if(!s.exists){ el.innerHTML='<p class="bos-satir">Bu gune ait rapor yok.</p>'; return; }
+      d=hrCache[gun]=s.data(); }
+    el.innerHTML=hrHtml(d);
+  }catch(e){ el.innerHTML='<p class="bos-satir">Rapor gosterilemedi ('+hrEsc(e&&e.message||'hata')+').</p>'; }
+}
+// ================== /HAFTALIK RAPOR ==================
 
 /* ============================================================
    SUBE RAPORU v3 — sube sekmeli, TAM bolumlu
