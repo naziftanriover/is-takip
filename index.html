@@ -536,9 +536,9 @@ tr.sr-fark td,tr.sr-gec td{background:#fdf9ef}
     <button class="sekme-btn" data-hedef="sekme-karne" type="button">Personel Karnesi</button>
     <button class="sekme-btn" data-hedef="sekme-cezalar" type="button">Cezalar</button>
     <button class="sekme-btn ceza-btn" data-hedef="sekme-ceza" type="button">Ceza</button>
-    <button class="sekme-btn" data-hedef="sekme-log" type="button">Denetim Izi</button>
     <button class="sekme-btn" data-hedef="sekme-subeler" type="button">Subeler</button>
     <button class="sekme-btn" data-hedef="sekme-yedek" type="button">Yedekleme</button>
+    <button class="sekme-btn" data-hedef="sekme-log" type="button">Loglar</button>
   </nav>
 
   <main class="icerik">
@@ -798,7 +798,7 @@ tr.sr-fark td,tr.sr-gec td{background:#fdf9ef}
 
     <!-- DENETIM IZI -->
     <section id="sekme-log" class="sekme-bolum gizli">
-      <h2>Denetim Izi (kim ne yapti)</h2>
+      <h2>Loglar (kim ne yapti)</h2>
       <p class="alt-baslik">Bu kayitlar guvenlik geregi degistirilemez ve silinemez.</p>
       <p id="lHata" class="hata-mesaji"></p>
       <ul id="lListe" class="kayit-liste"></ul>
@@ -1162,11 +1162,11 @@ $('girisForm').addEventListener('submit', async (e)=>{
   if(!email){h.textContent='Lutfen e-posta girin.';return;}
   if(!sifre){h.textContent='Lutfen sifre girin.';return;}
   const btn=$('girisBtn'); btn.disabled=true; btn.textContent='Giris yapiliyor...';
-  try{ await auth.signInWithEmailAndPassword(email,sifre); }
+  try{ await auth.signInWithEmailAndPassword(email,sifre); try{ await logYaz('giris','Oturum',null,'giris yapildi'); }catch(_){} }
   catch(err){ console.error('[is-takip] giris',err); h.textContent=authHata(err); }
   finally{ btn.disabled=false; btn.textContent='Giris Yap'; }
 });
-$('cikisBtn').addEventListener('click', ()=>auth.signOut());
+$('cikisBtn').addEventListener('click', async ()=>{ try{ await logYaz('cikis','Oturum',null,'cikis yapildi'); }catch(_){} auth.signOut(); });
 
 // ================== SEKMELER ==================
 // Mobil acilir menu (drawer) ac/kapa
