@@ -3811,6 +3811,8 @@ async function srGoster(gun){
 // ================== HAFTALIK RAPOR (sube maillerinden) ==================
 // Veri kaynagi: Firestore koleksiyonu "haftalikRapor", belge kimligi = YYYY-MM-DD
 // Nazif "raporlari oku" dediginde otomatik yazilir; burada sadece OKUNUR.
+// Sube belgesi: { sube:[..], musteri:[..], personel:[..], cariler:{isim:tutar}, tezatlar:[..] }
+// (eski format destegi: sadece metin varsa oldugu gibi gosterilir)
 var hrListe=null, hrCache={};
 var HR_SUBE=['ALSANCAK','İTİMAT','KASGAR','ZEYTİNLİK'];
 function hrStyle(){
@@ -3819,8 +3821,19 @@ function hrStyle(){
   st.textContent=[
 "#hrIcerik{--tx:#1a2230;--mu:#66748a;--ln:#dde3ea;--s1:#f7f8fa;--bad:#b3261e;--badb:#fdecea;--ok:#0f7b52;--okb:#e6f5ee;color:var(--tx);font-size:13px;line-height:1.5;}",
 "#hrIcerik .hr-kart{border:1px solid var(--ln);border-radius:12px;padding:14px 16px;margin:0 0 16px;background:#fff;}",
-"#hrIcerik .hr-bas{font-size:15px;font-weight:700;margin:0 0 8px;padding-bottom:7px;border-bottom:1px solid var(--ln);}",
+"#hrIcerik .hr-bas{font-size:15px;font-weight:700;margin:0 0 10px;padding-bottom:7px;border-bottom:1px solid var(--ln);}",
 "#hrIcerik .hr-metin{white-space:pre-wrap;font-size:12.5px;color:#39425a;margin:0 0 12px;}",
+"#hrIcerik .hr-grup{margin:0 0 10px;border-left:3px solid #ccc;padding:1px 0 1px 11px;}",
+"#hrIcerik .hr-grup-bas{font-size:10.5px;font-weight:800;letter-spacing:.08em;margin:0 0 4px;}",
+"#hrIcerik .hr-grup ul{margin:0;padding-left:16px;} #hrIcerik .hr-grup li{margin:0 0 3px;color:#39425a;font-size:12.5px;}",
+"#hrIcerik .hr-g-sube{border-left-color:#1f6feb;} #hrIcerik .hr-g-sube .hr-grup-bas{color:#1f6feb;}",
+"#hrIcerik .hr-g-musteri{border-left-color:#7a3ff2;} #hrIcerik .hr-g-musteri .hr-grup-bas{color:#7a3ff2;}",
+"#hrIcerik .hr-g-personel{border-left-color:#d98324;} #hrIcerik .hr-g-personel .hr-grup-bas{color:#b5651d;}",
+"#hrIcerik .hr-cari{border:1px solid #bfe3d2;background:var(--okb);border-radius:10px;padding:9px 11px;margin:0 0 12px;}",
+"#hrIcerik .hr-cari .hr-grup-bas{color:var(--ok);margin-bottom:6px;}",
+"#hrIcerik .hr-cari-liste{display:flex;flex-wrap:wrap;gap:6px;}",
+"#hrIcerik .hr-cari-item{background:var(--ok);color:#fff;border-radius:999px;padding:3px 11px;font-size:12px;font-variant-numeric:tabular-nums;}",
+"#hrIcerik .hr-cari-item b{font-weight:700;}",
 "#hrIcerik .hr-sorun{border:1px solid var(--bad);border-radius:10px;background:var(--badb);padding:10px 12px;}",
 "#hrIcerik .hr-sorun-bas{font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--bad);margin:0 0 7px;}",
 "#hrIcerik .hr-sorun ul{margin:0;padding-left:18px;} #hrIcerik .hr-sorun li{margin:0 0 5px;color:#7a1a15;}",
@@ -3831,10 +3844,33 @@ function hrStyle(){
 }
 function hrEsc(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function hrTl(n){ n=Number(n); if(!isFinite(n)) return ''; var neg=n<0; n=Math.abs(n);
+  var s=String(n).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); return (neg?'-':'')+s; }
+function hrGrup(baslik,arr,cls){
+  if(!arr||!arr.length) return '';
+  var g='<div class="hr-grup '+cls+'"><div class="hr-grup-bas">'+hrEsc(baslik)+'</div><ul>';
+  for(var i=0;i<arr.length;i++){ g+='<li>'+hrEsc(arr[i])+'</li>'; }
+  return g+'</ul></div>';
+}
+function hrCariHtml(cariler){
+  var k=cariler?Object.keys(cariler):[];
+  if(!k.length) return '';
+  var g='<div class="hr-cari"><div class="hr-grup-bas">CARİLER</div><div class="hr-cari-liste">';
+  for(var i=0;i<k.length;i++){ g+='<span class="hr-cari-item"><b>'+hrEsc(k[i])+'</b> '+hrEsc(hrTl(cariler[k[i]]))+' TL</span>'; }
+  return g+'</div></div>';
+}
 function hrKartHtml(ad,o){
   var g='<div class="hr-kart"><div class="hr-bas">'+hrEsc(ad)+'</div>';
-  if(!o){ g+='<div class="hr-bos">Bu sube icin rapor yok.</div></div>'; return g; }
-  g+='<div class="hr-metin">'+hrEsc(o.metin||'')+'</div>';
+  if(!o){ return g+'<div class="hr-bos">Bu sube icin rapor yok.</div></div>'; }
+  var kategoriVar = (o.sube&&o.sube.length)||(o.musteri&&o.musteri.length)||(o.personel&&o.personel.length);
+  if(!kategoriVar && o.metin){
+    g+='<div class="hr-metin">'+hrEsc(o.metin)+'</div>';
+  } else {
+    g+=hrGrup('ŞUBE',o.sube,'hr-g-sube');
+    g+=hrGrup('MÜŞTERİ',o.musteri,'hr-g-musteri');
+    g+=hrGrup('PERSONEL',o.personel,'hr-g-personel');
+  }
+  g+=hrCariHtml(o.cariler);
   var tz=(o.tezatlar||[]);
   if(tz.length){
     g+='<div class="hr-sorun"><div class="hr-sorun-bas">⚠ TEZATLIKLAR ('+tz.length+')</div><ul>';
