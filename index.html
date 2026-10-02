@@ -731,6 +731,7 @@ tr.sr-fark td,tr.sr-gec td{background:#fdf9ef}
       <h2>Sube Islem Raporu</h2>
       <div class="kart-form">
         <div class="form-satir">
+          <div class="alan"><label>Ay</label><select id="srAy"></select></div>
           <div class="alan"><label>Rapor gunu</label><select id="srTarih"></select></div>
         </div>
       </div>
@@ -742,6 +743,7 @@ tr.sr-fark td,tr.sr-gec td{background:#fdf9ef}
       <h2>Haftalik Rapor</h2>
       <div class="kart-form">
         <div class="form-satir">
+          <div class="alan"><label>Ay</label><select id="hrAy"></select></div>
           <div class="alan"><label>Rapor gunu</label><select id="hrTarih"></select></div>
         </div>
       </div>
@@ -3757,8 +3759,26 @@ function srYon(k,bolum){
   var kirmizi=/(From Shop|Down|To Manager)$/.test(ad);
   return '<span class="sr-yon sr-'+(kirmizi?'kirmizi':'yesil')+'">'+srEsc(ad)+'</span>'; }
 
+// Ay + gun menusunu doldurur: ay secilince gun menusu sadece o ayin gunlerini gosterir.
+// Boylece gunler biriktikce tek uzun liste olmaz. liste: YYYY-MM-DD (yeniden eskiye sirali).
+var RAPOR_AY_AD=['Ocak','Subat','Mart','Nisan','Mayis','Haziran','Temmuz','Agustos','Eylul','Ekim','Kasim','Aralik'];
+function raporAyEtiket(ay){ var p=String(ay).split('-'); var ai=parseInt(p[1],10); return (RAPOR_AY_AD[ai-1]||p[1])+' '+(p[0]||''); }
+function raporAyGunDoldur(ayEl, gunEl, liste, gosterFn){
+  if(!ayEl||!gunEl) return;
+  var aylar=[], gorulen={};
+  liste.forEach(function(g){ var ay=String(g).slice(0,7); if(ay && !gorulen[ay]){ gorulen[ay]=1; aylar.push(ay); } });
+  function gunleriDoldur(ay){
+    var gunler=liste.filter(function(g){ return String(g).slice(0,7)===ay; });
+    gunEl.innerHTML=gunler.length? gunler.map(function(g){return '<option value="'+g+'">'+g+'</option>';}).join('') : '<option value="">-</option>';
+    if(gunler.length) gosterFn(gunEl.value||gunler[0]);
+  }
+  ayEl.innerHTML=aylar.length? aylar.map(function(a){return '<option value="'+a+'">'+raporAyEtiket(a)+'</option>';}).join('') : '<option value="">-</option>';
+  ayEl.onchange=function(){ gunleriDoldur(ayEl.value); };
+  gunEl.onchange=function(){ gosterFn(gunEl.value); };
+  if(aylar.length) gunleriDoldur(aylar[0]);
+}
 async function subeRaporCiz(){
-  var el=$('srIcerik'), sel=$('srTarih');
+  var el=$('srIcerik');
   el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
   try{
     if(!srListe){
@@ -3782,12 +3802,10 @@ async function subeRaporCiz(){
         srListe=sonuc.filter(Boolean);
       }
       srListe.sort(function(a,b){ return a<b?1:(a>b?-1:0); });   // yeniden eskiye
-      sel.innerHTML=srListe.length? srListe.map(function(g){return '<option value="'+g+'">'+g+'</option>';}).join('')
-        : '<option value="">-</option>';
-      sel.onchange=function(){ srGoster(sel.value); };
+      if(srListe.length){ raporAyGunDoldur($('srAy'), $('srTarih'), srListe, srGoster); return; }
     }
     if(!srListe.length){ el.innerHTML='<p class="bos-satir">Henuz rapor yok. Ilk rapor yarin sabah dusecek.</p>'; return; }
-    srGoster(sel.value||srListe[0]);
+    srGoster(($('srTarih')&&$('srTarih').value)||srListe[0]);
   }catch(e){ el.innerHTML='<p class="bos-satir">Rapor okunamadi: '+srEsc(e.message)+'</p>'; }
 }
 
@@ -3892,7 +3910,7 @@ function hrHtml(d){
 }
 async function haftalikCiz(){
   hrStyle();
-  var el=document.getElementById('hrIcerik'), sel=document.getElementById('hrTarih');
+  var el=document.getElementById('hrIcerik');
   el.innerHTML='<p class="bos-satir">Yukleniyor...</p>';
   try{
     if(!hrListe){
@@ -3901,11 +3919,10 @@ async function haftalikCiz(){
         if(ix.exists && Array.isArray((ix.data()||{}).liste)) hrListe=ix.data().liste.slice();
       }catch(e){}
       hrListe.sort(function(a,b){ return a<b?1:(a>b?-1:0); });
-      sel.innerHTML=hrListe.length? hrListe.map(function(g){return '<option value="'+g+'">'+g+'</option>';}).join('') : '<option value="">-</option>';
-      sel.onchange=function(){ hrGoster(sel.value); };
+      if(hrListe.length){ raporAyGunDoldur(document.getElementById('hrAy'), document.getElementById('hrTarih'), hrListe, hrGoster); return; }
     }
     if(!hrListe.length){ el.innerHTML='<p class="bos-satir">Henuz haftalik rapor yok. Nazif rapor okuttugunda buraya dusecek.</p>'; return; }
-    hrGoster(sel.value||hrListe[0]);
+    hrGoster((document.getElementById('hrTarih')&&document.getElementById('hrTarih').value)||hrListe[0]);
   }catch(e){ el.innerHTML='<p class="bos-satir">Rapor okunamadi: '+hrEsc(e.message)+'</p>'; }
 }
 async function hrGoster(gun){
