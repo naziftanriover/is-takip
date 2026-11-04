@@ -4287,7 +4287,10 @@ function sr2SanalBolum(d,M,sb){
           '<td class="sr2-mu">'+srEsc(r.saat||'')+'</td><td class="sr2-mu">'+srEsc(r.ticket||'-')+'</td>'+
           '<td class="n"><b>'+sr2N(r.girilenStake)+'</b><br><span class="sr2-sm sr2-mu">'+sr2N(r.girilenPayout)+'</span></td>'+
           '<td class="n"><b>'+sr2N(r.panelStake)+'</b><br><span class="sr2-sm sr2-mu">'+sr2N(r.panelPayout)+'</span></td>'+
-          '<td class="n">'+(r.fark?sr2Sgn(r.fark):'<span class="sr2-mu">0,00</span>')+'</td>'+
+          '<td class="n">'+((r.farkStake!==undefined||r.farkPayout!==undefined)
+              ? ('<b>'+(r.farkStake?sr2Sgn(r.farkStake):'<span class="sr2-mu">0,00</span>')+'</b>'+
+                 '<br><span class="sr2-sm">'+(r.farkPayout?sr2Sgn(r.farkPayout):'<span class="sr2-mu">0,00</span>')+'</span>')
+              : (r.fark?sr2Sgn(r.fark):'<span class="sr2-mu">0,00</span>'))+'</td>'+
           '<td>'+(ok?'<span class="sr2-p ok">DOGRU</span>':'<span class="sr2-p bad">HATALI</span>')+
           (r['not']?'<div class="sr2-sm sr2-mu">'+srEsc(r['not'])+'</div>':'')+'</td></tr>'; }).join(''));
   } else {
