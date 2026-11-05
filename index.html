@@ -3732,6 +3732,8 @@ function srRozet(sev){ var o=SR_ONCELIK[sev]||SR_ONCELIK.dusuk;
 var SR_BETTY_AD={
   'CashTransferToShop':'Cash Transfer To Shop',
   'CashTransferFromShop':'Cash Transfer From Shop',
+  'CashTransferFromBank':'Cash Transfer From Bank',
+  'CashTransferToBank':'Cash Transfer To Bank',
   'StakeAdjustmentUp':'Stake Adjustment Up',
   'StakeAdjustmentDown':'Stake Adjustment Down',
   'CashPayoutAdjustmentUp':'Payout Adjustment Up',
@@ -3756,7 +3758,7 @@ function srBettyAd(k,bolum){
 function srYon(k,bolum){
   if(typeof k==='string') k={yon:k};
   var ad=srBettyAd(k,bolum);
-  var kirmizi=/(From Shop|Down|To Manager)$/.test(ad);
+  var kirmizi=/(From Shop|To Bank|Down|To Manager)$/.test(ad);
   return '<span class="sr-yon sr-'+(kirmizi?'kirmizi':'yesil')+'">'+srEsc(ad)+'</span>'; }
 
 // Ay + gun menusunu doldurur: ay secilince gun menusu sadece o ayin gunlerini gosterir.
@@ -4397,7 +4399,7 @@ function sr2Shop(d,M,sb){
     if(sb==='TUMU') har+='<tr class="grp"><td colspan="7">'+srEsc(sec.sube)+' &middot; IN '+sr2N((sec.ozet||{}).inTutar)+
       ' ('+srAdet((sec.ozet||{}).inAdet)+') &middot; OUT '+sr2N((sec.ozet||{}).outTutar)+' ('+srAdet((sec.ozet||{}).outAdet)+')</td></tr>';
     L.forEach(function(x){ n++;
-      var inn=/ToShop/i.test(String(x.tip||''));
+      var inn=x.yon?(x.yon==='IN'):/ToShop|FromBank/i.test(String(x.tip||''));
       har+='<tr><td class="sr2-mu">'+srEsc(x.saat||'')+'</td>'+
         '<td><span class="sr2-p '+(inn?'ok':'bad')+'">'+(inn?'IN':'OUT')+'</span></td>'+
         '<td>'+srEsc(x.kanal||'')+'</td><td class="sr2-mu">'+srEsc(x.ticket||'-')+'</td>'+
