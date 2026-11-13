@@ -4046,10 +4046,14 @@ function sr2Sec(no,baslik,alt,govde){
 
 /* ---------- EN USTTE: NEREDE HATA VAR ---------- */
 /* hangi bacak tutmuyor: ciro mu odeme mi — ikisini de ayri ayri yazar */
-function sr2Bacak(gc,pc,go,po){
+function sr2Bacak(gc,pc,go,po,et){
+  /* et: karsilastirilan tarafin adi. Varsayilan 'panel'.
+     BASCOM satirinda durum Betty'ye gore hesaplaniyor (kur.js), bu yuzden
+     orada 'Betty' gecilir - yoksa "tutmuyor: fark yok" yaziyordu (9 Kasim). */
+  et = et || 'panel';
   var t=[];
-  if(Math.abs((gc||0)-(pc||0))>0.005) t.push('ciro '+sr2N(gc)+' / panel '+sr2N(pc)+' (fark '+sr2N((gc||0)-(pc||0))+')');
-  if(Math.abs((go||0)-(po||0))>0.005) t.push('odeme '+sr2N(go)+' / panel '+sr2N(po)+' (fark '+sr2N((go||0)-(po||0))+')');
+  if(Math.abs((gc||0)-(pc||0))>0.005) t.push('ciro '+sr2N(gc)+' / '+et+' '+sr2N(pc)+' (fark '+sr2N((gc||0)-(pc||0))+')');
+  if(Math.abs((go||0)-(po||0))>0.005) t.push('odeme '+sr2N(go)+' / '+et+' '+sr2N(po)+' (fark '+sr2N((go||0)-(po||0))+')');
   return t.length?t.join(' · '):'fark yok';
 }
 function sr2Sorunlar(d,M,sb){
@@ -4075,7 +4079,7 @@ function sr2Sorunlar(d,M,sb){
         ek('y',s,'2','Betty &harr; BASCOM',AD[k]+' tutmuyor: Betty '+sr2N(o[k.replace('Durum','Betty')])+' / BASCOM '+sr2N(o[k.replace('Durum','Bascom')])); });
       (u.sanal||[]).forEach(function(x){
         if(x.bettyDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - Betty ye girilen panel ile tutmuyor: '+sr2Bacak(x.bettyStake,x.panelStake,x.bettyPo,x.panelPo),'gece:'+sr2Ad(s)+'|'+sr2Ad(x.kanal));
-        if(x.bascomDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - BASCOM a yazilan panel ile tutmuyor: '+sr2Bacak(x.bascomStake,x.panelStake,x.bascomPo,x.panelPo)); });
+        if(x.bascomDurum==='fark') ek('y',s,'3','Sanallar',x.kanal+' - BASCOM a yazilan Betty ile tutmuyor: '+sr2Bacak(x.bascomStake,x.bettyStake,x.bascomPo,x.bettyPo,'Betty')); });
       (u.kanal||[]).forEach(function(x){ if(x.durum==='fark')
         ek('y',s,'4','Shop in / out',x.yon+' '+x.kanal+' - Betty '+sr2N(x.betty)+' / BASCOM '+sr2N(x.bascom)+' (fark '+sr2N(x.fark)+')'); });
       if(u.or){
@@ -4286,7 +4290,14 @@ function sr2SanalBolum(d,M,sb){
       '<th class="n">Panel (net)</th><th class="n">Fark</th><th>Durum</th>',
       gs.map(function(r){ var ok=!/HATAL/i.test(String(r.durum||''));
         return '<tr><td><b>'+srEsc(r.sube)+'</b></td><td><b>'+srEsc(r.kanal)+'</b></td><td>'+srEsc(r.personel||'-')+'</td>'+
-          '<td class="sr2-mu">'+srEsc(r.saat||'')+'</td><td class="sr2-mu">'+srEsc(r.ticket||'-')+'</td>'+
+          /* BOLUNMUS GIRISTE HER BILET KENDI SAATI VE TUTARIYLA (13 Kasim, Nazif
+             istedi): "98685+98686" tek saatle gosterilince hangi biletin ne
+             zaman ve ne kadar girildigi gorunmuyordu. */
+          '<td class="sr2-mu">'+srEsc(r.saat||'')+'</td>'+
+          '<td class="sr2-mu">'+((r.biletler&&r.biletler.length>1)
+            ? r.biletler.map(function(b){ return '<div>'+srEsc(b.ticket)+' <span class="sr2-sm">'+srEsc(b.saat||'')+
+                '</span><div class="sr2-sm sr2-mu">'+sr2N(b.stake)+' / '+sr2N(b.payout)+'</div></div>'; }).join('')
+            : srEsc(r.ticket||'-'))+'</td>'+
           '<td class="n"><b>'+sr2N(r.girilenStake)+'</b><br><span class="sr2-sm sr2-mu">'+sr2N(r.girilenPayout)+'</span></td>'+
           '<td class="n"><b>'+sr2N(r.panelStake)+'</b><br><span class="sr2-sm sr2-mu">'+sr2N(r.panelPayout)+'</span></td>'+
           '<td class="n">'+((r.farkStake!==undefined||r.farkPayout!==undefined)
@@ -4435,7 +4446,10 @@ function sr2Adj(d,M,sb,tip){
         '<td><span class="sr2-p '+(up?'bad':'ok')+'">'+(up?'UP':'DOWN')+'</span></td>'+
         '<td class="sr2-mu">'+srEsc(x.ticket||'-')+'</td>'+
         '<td class="n"><b>'+sr2N(x.tutar)+'</b></td><td>'+srEsc(x.personel||'-')+'</td>'+
-        '<td class="sr2-sm'+(x.aciklama?'':' sr2-mu')+'">'+srEsc(x.aciklama||'(aciklama yok)')+'</td></tr>';
+        /* STAKE DUZELTMESINDE ACIKLAMA ALANI YOKTUR (13 Kasim, Nazif):
+           bos olmasi eksiklik degil - "(aciklama yok)" yazmak yanlis alarm. */
+        '<td class="sr2-sm sr2-mu">'+(x.aciklamaAlaniVar===false
+            ? '&mdash;' : srEsc(x.aciklama||'(aciklama yok)'))+'</td></tr>';
     });
   });
   if(M){ sr2Liste(sb).forEach(function(s){ var u=sr2Bul(M.subeler,s); if(!u||!(u.kurus||[]).length) return;
